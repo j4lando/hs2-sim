@@ -1,0 +1,45 @@
+# HS-2 mission configuration
+#
+# Every value here is an input you can change. Values that came from the
+# supplied UNP budget spreadsheets are tagged  [budget].  Values the user
+# stated directly are tagged  [given].  Everything else is an assumption and
+# is tagged  [assumed]  with a short justification, because those are the
+# numbers you should challenge first.
+
+simulation:
+  # Length of the propagation. 3 days is enough to average out the ground
+  # station geometry (the ISS ground track repeats roughly every 3 days) while
+  # staying fast. Bump to 30+ for beta-angle season effects.
+  duration_days: 3.0
+  # Integration / sampling step. 5 s resolves an 8 minute pass into ~100
+  # samples and keeps the attitude-feasibility search affordable.
+  time_step_s: 5.0
+  epoch_utc: "2027-03-20T12:00:00"   # [assumed] near equinox -> mid-range beta
+
+orbit:
+  # ISS orbit. [given] target orbit.
+  # Basilisk is initialised from these classical elements.
+  altitude_km: 415.0          # [assumed] ISS operating band is 410-420 km
+  eccentricity: 0.0007        # [assumed] near-circular, typical ISS value
+  inclination_deg: 51.64      # ISS inclination
+  raan_deg: 0.0               # [assumed] scan this to sweep beta angle
+  arg_periapsis_deg: 0.0
+  true_anomaly_deg: 0.0
+
+environment:
+  # Solar constant at 1 AU. The sim scales this by actual Sun distance.
+  solar_constant_w_m2: 1361.0
+  earth_albedo: 0.30          # [assumed] global mean; drives albedo loading
+  earth_ir_w_m2: 237.0        # [assumed] global mean outgoing longwave
+  # Centred-dipole magnetic field is used for magnetorquer authority.
+  # 'wmm' is higher fidelity but needs the WMM coefficient file and a date
+  # inside its validity window; 'dipole' is valid for any epoch.
+  magnetic_model: dipole      # dipole | wmm
+
+analysis:
+  # Beta angle sweep for the power/thermal trade. Each entry re-runs the
+  # propagation with a different RAAN, which is what actually moves beta.
+  raan_sweep_deg: [0.0, 45.0, 90.0, 135.0, 180.0, 225.0, 270.0, 315.0]
+  # Payload cadence candidates (experiments per second). The budget assumed
+  # 0.2 Hz; the user asked for this to be a free parameter.
+  payload_rate_hz_sweep: [0.02, 0.05, 0.1, 0.2, 0.5, 1.0]

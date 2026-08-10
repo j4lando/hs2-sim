@@ -1,0 +1,224 @@
+# HS-2 spacecraft definition.
+#
+# Body frame  [given]:
+#   +z  normal to a SHORT (10 x 10 cm) end face  -> the 3U long axis is z
+#   +x, +y  normal to the LONG (10 x 30 cm) faces
+#
+# Tags:  [given] stated by the user, [budget] from the UNP spreadsheets,
+#        [datasheet] from a vendor datasheet, [assumed] our assumption.
+
+bus:
+  mass_kg: 6.0                 # [given]
+  # 3U: 10 x 10 x 30 cm, long axis along z (see frame note above).
+  dimensions_m: {x: 0.1, y: 0.1, z: 0.3}
+  # Solid-box inertia about the CoM. Magnetorquers are co-located with the
+  # CoM [given], so torque = m x B with no offset term.
+  # Ixx = Iyy = m/12 (0.1^2 + 0.3^2) = 0.05 ; Izz = m/12 (0.1^2+0.1^2) = 0.01
+  inertia_kgm2: {xx: 0.05, yy: 0.05, zz: 0.01}
+  # Residual magnetic dipole of the bus -- a disturbance the MTQs must fight.
+  residual_dipole_am2: 0.005   # [assumed] typical well-built 3U
+  drag_coefficient: 2.2        # [assumed] standard free-molecular value
+  # Offset between centre of pressure and centre of mass, drives aero torque.
+  cp_cm_offset_m: 0.02         # [assumed] 2 cm, typical for a tidy 3U
+
+# ---------------------------------------------------------------------------
+# Sensors. Boresights are unit vectors in the body frame.
+#   fov_full_deg      : full-cone field of view
+#   sun_exclusion_deg : half-cone keep-out about the boresight
+# ---------------------------------------------------------------------------
+sensors:
+  star_tracker:                 # Arcsec Sagitta
+    boresight: [0, 0, 1]        # [given] +z face
+    fov_full_deg: 25.2          # [given]
+    sun_exclusion_deg: 40.0     # [given] half cone
+    earth_exclusion_deg: 40.0   # [given] no Earth in exclusion during experiment
+  lost_camera:                  # Ximea, LOST algorithm
+    boresight: [0, 0, 1]        # [given] +z face
+    fov_full_deg: 25.2          # [given]
+    sun_exclusion_deg: 40.0     # [given]
+    earth_exclusion_deg: 40.0   # [given]
+  found_camera:                 # Ximea, FOUND algorithm
+    boresight: [1, 0, 0]        # [given] +x face
+    fov_full_deg: 74.0          # [given]
+    sun_exclusion_deg: 70.0     # [given] half cone
+    earth_exclusion_deg: 0.0    # FOUND is *required* to look at Earth's limb
+
+antennas:
+  # Two S-band patches give near-omni coverage [given].
+  s_band:
+    - {name: "S-band +x", boresight: [1, 0, 0], gain_dbi: 5.0}   # [budget]
+    - {name: "S-band -x", boresight: [-1, 0, 0], gain_dbi: 5.0}  # [budget]
+  gnss:
+    - {name: "GNSS -x", boresight: [-1, 0, 0]}                   # [given]
+
+# ---------------------------------------------------------------------------
+# Solar array geometry options under trade [given].
+#
+# The deployable wing hinges on the +y face along its long (z) edge, so the
+# wing normal rotates about +z starting from +y:
+#     n(theta) = Rz(theta) * y_hat = (-sin theta, cos theta, 0)
+#   theta =  90 deg -> n = -x   (the "points in -x" configurations)
+#   theta = 135 deg -> n = (-0.7071, -0.7071, 0)
+#
+# peak_w is power at NORMAL incidence with no cosine loss [given].
+# ---------------------------------------------------------------------------
+solar_array_options:
+
+  A_2panel_90:
+    description: "2-panel deployable on +y, rotated 90 deg so cells face -x"
+    peak_total_w: 14.8         # [given]
+    panels:
+      - {name: deployable, normal: [-1.0, 0.0, 0.0], peak_w: 14.8, deployable: true}
+
+  B_3panel_90:
+    description: "3-panel deployable on +y, rotated 90 deg so cells face -x"
+    peak_total_w: 22.0         # [given]
+    panels:
+      - {name: deployable, normal: [-1.0, 0.0, 0.0], peak_w: 22.0, deployable: true}
+
+  C_2panel_135_plus_body:
+    description: >
+      2-panel deployable on +y at a 135 deg dihedral to the +y face, plus one
+      body-mounted panel on the +y face. Per-panel power is taken as
+      14.8/2 = 7.4 W, consistent with the 7.5 W quoted for the body panel.
+    peak_total_w: 22.3         # 14.8 (wing) + 7.5 (body panel)
+    panels:
+      - {name: deployable, normal: [-0.70710678, -0.70710678, 0.0], peak_w: 14.8, deployable: true}
+      - {name: body_plus_y, normal: [0.0, 1.0, 0.0], peak_w: 7.5, deployable: false}
+
+solar_array:
+  # Cell/MPPT behaviour applied on top of the cosine law.
+  # peak_w is already an end-of-string number, so only pointing and eclipse
+  # are applied here plus a small MPPT/harness efficiency.
+  mppt_efficiency: 0.93        # [assumed] typical MPPT + harness
+  degradation: 0.98            # [assumed] 1-year LEO cell degradation
+
+battery:
+  # Not supplied in the budgets -- this is the single most important unknown
+  # for the "how many images" answer, so it is exposed here and swept.
+  capacity_wh: 77.0            # [assumed] typical 3U pack (e.g. 8 x 18650)
+  depth_of_discharge_limit: 0.30   # [assumed] keep SOC above 70 % for cycle life
+  round_trip_efficiency: 0.95      # [assumed]
+  initial_soc: 0.90
+
+# ---------------------------------------------------------------------------
+# Power draw. Only Peak Power and Qty are trusted from the budget [given];
+# the mode duty cycles below are ours, driven by the CONOPS state machine.
+# ---------------------------------------------------------------------------
+power:
+  margin: 0.10                 # [budget] 10 % COTS margin
+  components:
+    obc:            {peak_w: 1.50, qty: 1, subsystem: CDH}
+    radio_tx:       {peak_w: 10.40, qty: 1, subsystem: COMM}
+    radio_rx:       {peak_w: 1.70, qty: 1, subsystem: COMM}
+    cameras:        {peak_w: 0.98, qty: 2, subsystem: PAY}
+    star_tracker:   {peak_w: 1.50, qty: 1, subsystem: PAY}
+    gnss_rx:        {peak_w: 0.13, qty: 1, subsystem: PAY}
+    gnss_patch:     {peak_w: 0.02, qty: 1, subsystem: PAY}
+    mtq_cr0002:     {peak_w: 0.50, qty: 2, subsystem: ADCS}
+    mtq_mt01:       {peak_w: 1.75, qty: 1, subsystem: ADCS}
+    imu:            {peak_w: 0.22, qty: 1, subsystem: ADCS}
+    eps:            {peak_w: 1.28, qty: 1, subsystem: POWER}
+    heater:         {peak_w: 4.84, qty: 1, subsystem: THR}   # NOT trusted [given]
+
+  # Heater duty cycle is explicitly untrusted; treated as a swept parameter.
+  heater_duty_cycle: 0.30      # [budget, untrusted]
+
+  # Which components are powered in each CONOPS mode, and at what duty cycle.
+  modes:
+    safe:
+      obc: 0.50
+      radio_rx: 1.0
+      imu: 1.0
+      eps: 1.0
+      heater: heater_duty
+    detumble:
+      obc: 0.50
+      imu: 1.0
+      eps: 1.0
+      mtq_cr0002: 1.0
+      mtq_mt01: 1.0
+      heater: heater_duty
+    standby:
+      obc: 0.75
+      radio_rx: 1.0
+      imu: 1.0
+      eps: 1.0
+      gnss_rx: 1.0
+      star_tracker: 0.10
+      mtq_cr0002: 0.10
+      mtq_mt01: 0.10
+      heater: heater_duty
+    slew:
+      obc: 1.0
+      radio_rx: 1.0
+      imu: 1.0
+      eps: 1.0
+      gnss_rx: 1.0
+      star_tracker: 1.0
+      mtq_cr0002: 1.0
+      mtq_mt01: 1.0
+      heater: heater_duty
+    experiment:
+      obc: 1.0
+      radio_rx: 1.0
+      imu: 1.0
+      eps: 1.0
+      gnss_rx: 1.0
+      star_tracker: 1.0
+      cameras: 1.0
+      mtq_cr0002: 0.20
+      mtq_mt01: 0.20
+      heater: heater_duty
+    downlink:
+      obc: 1.0
+      radio_rx: 1.0
+      radio_tx: 1.0
+      imu: 1.0
+      eps: 1.0
+      gnss_rx: 1.0
+      star_tracker: 1.0
+      mtq_cr0002: 0.20
+      mtq_mt01: 0.20
+      heater: heater_duty
+
+# ---------------------------------------------------------------------------
+# ADCS actuators. Dipole moments are from datasheets, not the budget.
+# ---------------------------------------------------------------------------
+adcs:
+  magnetorquers:
+    # CubeSpace Gen2 CubeTorquer CR0002: 0.2 A m^2 rated dipole, 51 ohm,
+    # +-5 V linear range -> 0.49 W, which matches the 0.50 W in the budget.
+    - {name: CR0002_x, axis: [1, 0, 0], dipole_am2: 0.20, power_w: 0.50}
+    - {name: CR0002_y, axis: [0, 1, 0], dipole_am2: 0.20, power_w: 0.50}
+    # EXA MT01 compact magnetorquer. Dipole is not published clearly; 0.20
+    # A m^2 assumed so the three axes are balanced. [assumed] -- sweep this.
+    - {name: MT01_z,   axis: [0, 0, 1], dipole_am2: 0.20, power_w: 1.75}
+  # Pointing performance targets.
+  pointing_accuracy_deg: 1.0     # [assumed] achievable with star tracker + MTQ
+  settle_margin: 1.30            # [assumed] slews take 30 % longer than the
+                                 # time-optimal bang-bang estimate
+  initial_tumble_rate_dps: 10.0  # [assumed] typical post-deployment rate
+
+# ---------------------------------------------------------------------------
+# Payload.
+# ---------------------------------------------------------------------------
+payload:
+  # Ximea xiQ with e2v EV76C560: 1280 x 1024 mono.
+  # 1280 * 1024 = 1,310,720 B raw at 8 bpp, which is exactly the
+  # "Uncompressed Image Size Together" in the data budget. [budget]
+  image_width_px: 1280
+  image_height_px: 1024
+  bits_per_pixel: 8
+  compression_ratio: 0.50        # [budget] -> 655,360 B stored per image
+  n_cameras: 2
+  # USB 2.0 high speed: 480 Mb/s signalling. Sustained bulk throughput is
+  # ~35 MB/s in practice; both cameras share one bus [given: rate limited by
+  # a USB 2.0 connector].
+  usb2_raw_mbps: 480.0
+  usb2_bulk_efficiency: 0.60     # [assumed] 480 Mb/s -> ~36 MB/s sustained
+  # Bytes of numerical data recorded per experiment [budget].
+  numerical_bytes_per_experiment: 122
+  # Debug images actually downlinked per day: 1 LOST + 1 FOUND [given].
+  debug_images_per_day: 2
+  storage_gb: 32.0               # [assumed] eMMC available to payload

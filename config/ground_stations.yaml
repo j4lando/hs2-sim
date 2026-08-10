@@ -1,0 +1,86 @@
+# Leaf Space "Leaf Line" ground segment.
+#
+# IMPORTANT -- READ BEFORE TRUSTING THE PASS COUNTS
+#
+# leaf.space is blocked by this environment's network egress policy, so the
+# exact site coordinates could not be pulled from Leaf Space's own network
+# page. The site LIST below is assembled from Leaf Space press releases and
+# public reporting, and the LAT/LON are approximate city-level coordinates for
+# each announced region, not surveyed antenna positions.
+#
+# What this means for the results:
+#   * The NUMBER and rough LATITUDE SPREAD of sites is right, so the aggregate
+#     passes-per-day figure is representative.
+#   * Any single station's pass times are only as good as its coordinate.
+#   * Leaf Space advertises 40+ antennas across 17+ locations; multiple
+#     antennas at one location do not add geometric passes, they add capacity
+#     and scheduling redundancy, so we model LOCATIONS here.
+#
+# Replace `latitude_deg`/`longitude_deg` with the real values from your Leaf
+# Space service agreement and re-run -- nothing else needs to change.
+#
+# Published Leaf Line S-band performance (used by comms.py):
+#   uplink   2025-2110 MHz, EIRP 50 dBW
+#   downlink 2200-2290 MHz, G/T  12.8 dB/K
+#
+# `verified: false` marks a coordinate we could not confirm.
+
+defaults:
+  minimum_elevation_deg: 10.0   # [budget] UNP requirement
+  altitude_m: 100.0
+  verified: false
+
+network:
+  name: "Leaf Space Leaf Line"
+  gt_db_per_k: 12.8             # S-band downlink G/T, published
+  uplink_eirp_dbw: 50.0         # S-band uplink EIRP, published
+  downlink_band_mhz: [2200.0, 2290.0]
+  uplink_band_mhz: [2025.0, 2110.0]
+
+stations:
+  - {name: "Lomazzo, Italy",         latitude_deg: 45.70,  longitude_deg: 9.03,    altitude_m: 300}
+  - {name: "Vilnius, Lithuania",     latitude_deg: 54.69,  longitude_deg: 25.28,   altitude_m: 150}
+  - {name: "Dublin, Ireland",        latitude_deg: 53.35,  longitude_deg: -6.26,   altitude_m: 50}
+  - {name: "Madrid, Spain",          latitude_deg: 40.42,  longitude_deg: -3.70,   altitude_m: 650}
+  - {name: "Colombo, Sri Lanka",     latitude_deg: 6.93,   longitude_deg: 79.86,   altitude_m: 10}
+  - {name: "Santa Maria, Azores",    latitude_deg: 36.97,  longitude_deg: -25.10,  altitude_m: 100}
+  - {name: "Shetland, Scotland",     latitude_deg: 60.50,  longitude_deg: -1.20,   altitude_m: 50}
+  - {name: "Reykjavik, Iceland",     latitude_deg: 64.13,  longitude_deg: -21.90,  altitude_m: 50}
+  - {name: "Sofia, Bulgaria",        latitude_deg: 42.70,  longitude_deg: 23.32,   altitude_m: 550}
+  - {name: "Perth, W. Australia",    latitude_deg: -31.95, longitude_deg: 115.86,  altitude_m: 20}
+  - {name: "Adelaide, S. Australia", latitude_deg: -34.93, longitude_deg: 138.60,  altitude_m: 50}
+  - {name: "Vancouver, BC, Canada",  latitude_deg: 49.28,  longitude_deg: -123.12, altitude_m: 70}
+  - {name: "Auckland, New Zealand",  latitude_deg: -36.85, longitude_deg: 174.76,  altitude_m: 30}
+  - {name: "Alcantara, Brazil",      latitude_deg: -2.37,  longitude_deg: -44.40,  altitude_m: 30}
+  - {name: "Spaceport Nova Scotia",  latitude_deg: 45.29,  longitude_deg: -60.99,  altitude_m: 30}
+
+# ---------------------------------------------------------------------------
+# Downlink radio (EnduroSat S-band transceiver). Spacecraft-side numbers are
+# from the supplied link budget, which the user flagged as trustworthy for
+# antenna specifications.
+# ---------------------------------------------------------------------------
+radio:
+  tx_power_w: 2.0               # [budget]
+  tx_antenna_gain_dbi: 5.0      # [budget] ISISpace S-band patch
+  # The budget carries -10 dB of pointing loss for the worst case where the
+  # spacecraft is tumbling and the patch is edge-on. With attitude control and
+  # two opposed patches, a much smaller loss is realistic; both are evaluated.
+  pointing_loss_db: -3.0        # [assumed] controlled attitude, 2 patches
+  pointing_loss_db_worst: -10.0 # [budget] uncontrolled worst case
+  circuit_loss_db: -1.0         # [budget]
+  return_loss_db: -3.0          # [budget]
+  polarization_loss_db: -2.0    # [budget]
+  atmospheric_loss_db: -1.0     # [budget]
+  rain_loss_db: -0.1            # [budget] 99.9 % availability
+  frequency_ghz: 2.25           # centre of the Leaf Line 2200-2290 downlink
+  eb_n0_required_db: 11.0       # [budget] BPSK
+  required_margin_db: 6.0       # [budget] UNP requirement
+  implementation_loss_db: 0.0
+  # Modulation / coding. The budget uses rate-1/2 convolutional FEC, doubling
+  # the transmitted bits.
+  fec_overhead: 2.0             # [budget] "Convolutional FEC as extra %" = 100 %
+  # Symbol rates the radio can actually be commanded to. The link solver picks
+  # the highest rate that closes with margin at each elevation.
+  available_bitrates_kbps: [9.6, 19.2, 38.4, 76.8, 153.6, 256.0, 512.0, 1000.0]
+  # Time lost at the start of a pass to acquisition and lock.
+  acquisition_overhead_s: 30.0  # [assumed]

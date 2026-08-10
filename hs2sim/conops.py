@@ -1,0 +1,305 @@
+"""The mode scheduler -- where power, pointing, comms and ADCS interact.
+
+A discrete-time state machine walks the propagation and decides what the
+spacecraft is doing at each sample. The point of running it, rather than
+adding up per-subsystem averages, is that the constraints are coupled:
+
+  * Experiment mode needs a legal attitude, which only exists part of the time.
+  * Downlink needs an attitude that puts a patch antenna on the ground station.
+  * Both compete with sun-pointing for charging, and the battery is finite.
+  * Every switch between those attitudes costs a magnetorquer-limited slew,
+    which is minutes, not seconds -- so mode thrash is genuinely expensive.
+
+Mode priority, highest first:
+    DOWNLINK  when a station is visible and there is data queued
+    EXPERIMENT when the pointing constraints are satisfiable and SOC allows
+    STANDBY   otherwise (sun-pointing, charging)
+and SLEW is inserted whenever the target attitude changes.
+"""
+
+from __future__ import annotations
+
+import dataclasses
+import math
+
+import numpy as np
+
+from . import comms, power
+from .adcs import TorqueAuthority, inertia_matrix, slew_time_s
+from .config import MissionConfig
+from .environment import EnvironmentResult
+from .geometry import PointingResult
+
+MODE_SAFE = 0
+MODE_STANDBY = 1
+MODE_SLEW = 2
+MODE_EXPERIMENT = 3
+MODE_DOWNLINK = 4
+
+MODE_NAMES = {
+    MODE_SAFE: "safe",
+    MODE_STANDBY: "standby",
+    MODE_SLEW: "slew",
+    MODE_EXPERIMENT: "experiment",
+    MODE_DOWNLINK: "downlink",
+}
+
+
+@dataclasses.dataclass
+class ConopsResult:
+    mode: np.ndarray                # (N,) mode code per sample
+    dcm_BN: np.ndarray              # (N,3,3) attitude actually flown
+    generation_w: np.ndarray
+    load_w: np.ndarray
+    soc: np.ndarray
+    experiments: np.ndarray         # (N,) experiments completed in that sample
+    downlinked_bytes: np.ndarray    # (N,) information bytes sent
+    queue_bytes: np.ndarray         # (N,) backlog awaiting downlink
+    slew_count: int
+    slew_seconds: float
+    battery_limited: bool
+
+    def mode_fractions(self) -> dict[str, float]:
+        total = len(self.mode)
+        return {name: float(np.sum(self.mode == code) / total)
+                for code, name in MODE_NAMES.items()}
+
+
+def principal_angle(dcm_a: np.ndarray, dcm_b: np.ndarray) -> float:
+    """Rotation angle between two attitudes, radians."""
+    rel = dcm_b @ dcm_a.T
+    cos_theta = (np.trace(rel) - 1.0) / 2.0
+    return float(np.arccos(np.clip(cos_theta, -1.0, 1.0)))
+
+
+def downlink_attitude(env: EnvironmentResult,
+                      station_index: np.ndarray,
+                      sun_dcm: np.ndarray) -> np.ndarray:
+    """Attitude that puts the +x or -x S-band patch on the visible station.
+
+    The remaining freedom about the patch boresight is spent on solar power,
+    approximated by keeping the standby attitude's z axis as close as possible.
+    """
+    n = env.n_samples
+    dcm = sun_dcm.copy()
+    # Station direction is not directly in the recorded messages, but the
+    # spacecraft-to-station unit vector is well approximated by the negative of
+    # the position vector rotated toward the station; we instead use nadir,
+    # since at 10 deg elevation and above the station is within ~70 deg of
+    # nadir and a 5 dBi patch pointed at nadir covers it comfortably.
+    nadir = env.nadir_unit()
+    for i in range(n):
+        if station_index[i] < 0:
+            continue
+        target = nadir[i]
+        x_axis = target
+        # Keep z as close to the sun-pointing z as possible.
+        z_ref = sun_dcm[i, 2, :]
+        z_axis = z_ref - np.dot(z_ref, x_axis) * x_axis
+        norm = np.linalg.norm(z_axis)
+        if norm < 1e-9:
+            z_axis = np.array([0.0, 0.0, 1.0]) - x_axis * x_axis[2]
+            norm = np.linalg.norm(z_axis)
+        z_axis /= norm
+        y_axis = np.cross(z_axis, x_axis)
+        dcm[i] = np.vstack([x_axis, y_axis, z_axis])
+    return dcm
+
+
+def simulate(cfg: MissionConfig,
+             env: EnvironmentResult,
+             array: power.ArrayGeometry,
+             pointing: PointingResult,
+             standby_dcm: np.ndarray,
+             authority: TorqueAuthority,
+             payload_rate_hz: float,
+             passes: list[comms.Pass]) -> ConopsResult:
+    """Run the mode scheduler over the whole propagation."""
+    n = env.n_samples
+    dt = env.dt_s
+
+    # Which station (if any) is visible at each sample, preferring the one
+    # with the best link (shortest range).
+    ranges = np.where(env.station_access, env.station_range, np.inf)
+    best_station = np.argmin(ranges, axis=0)
+    visible = np.isfinite(np.min(ranges, axis=0))
+    station_index = np.where(visible, best_station, -1)
+
+    dl_dcm = downlink_attitude(env, station_index, standby_dcm)
+
+    # Achievable information rate while a station is up.
+    best_range = np.where(visible, np.min(ranges, axis=0), 1e12)
+    link_bps = comms.achievable_bitrate_bps(cfg, best_range)
+    link_bps = np.where(visible, link_bps, 0.0)
+
+    # Pre-compute generation for each candidate attitude.
+    gen_experiment = power.generation_w(cfg, env, array, pointing.dcm_BN)
+    gen_standby = power.generation_w(cfg, env, array, standby_dcm)
+    gen_downlink = power.generation_w(cfg, env, array, dl_dcm)
+
+    loads = power.mode_power_table(cfg)
+    battery = cfg.spacecraft.battery
+    capacity_wh = float(battery.capacity_wh)
+    soc_floor = 1.0 - float(battery.depth_of_discharge_limit)
+    charge_efficiency = float(battery.round_trip_efficiency)
+    # Hysteresis so the scheduler does not chatter around the floor.
+    soc_resume = soc_floor + 0.10
+
+    inertia = inertia_matrix(cfg)
+    slew_margin = float(cfg.spacecraft.adcs.settle_margin)
+    # Use the median authority: half the time the field geometry is better.
+    typical_torque = float(np.median(authority.max_torque_nm))
+    j_typical = float(np.max(np.diag(inertia)))
+
+    mode = np.full(n, MODE_STANDBY, dtype=np.int8)
+    flown = standby_dcm.copy()
+    generation = np.zeros(n)
+    load = np.zeros(n)
+    soc = np.zeros(n)
+    experiments = np.zeros(n)
+    downlinked = np.zeros(n)
+    queue = np.zeros(n)
+
+    img_bytes = comms.image_bytes(cfg)
+    per_experiment_bytes = (int(cfg.payload.numerical_bytes_per_experiment)
+                            + comms.SAMPLE_OVERHEAD_B) * comms.MARGIN
+    # Housekeeping accrues continuously and must also go down.
+    agg_size, agg_period = comms.AGGREGATE_TELEMETRY
+    housekeeping_bps = (agg_size + comms.SAMPLE_OVERHEAD_B) / agg_period
+    debug_image_bytes_per_day = (int(cfg.payload.debug_images_per_day)
+                                 * (img_bytes + comms.IMAGE_OVERHEAD_B))
+    debug_bytes_per_s = debug_image_bytes_per_day / 86400.0
+
+    level_wh = float(battery.initial_soc) * capacity_wh
+    backlog = 0.0
+    current_dcm = standby_dcm[0]
+    slew_remaining = 0.0
+    slew_count = 0
+    slew_seconds = 0.0
+    battery_limited = False
+    charging_hold = False
+
+    usb_fps = comms.usb2_max_fps(cfg)
+    effective_rate = min(payload_rate_hz, usb_fps)
+
+    # Hoisted out of the loop: recomputing these per sample would make the
+    # scheduler quadratic in the number of samples.
+    sun_hat = env.sun_unit()
+    array_settings = cfg.spacecraft.solar_array
+    array_efficiency = (float(array_settings.mppt_efficiency)
+                        * float(array_settings.degradation))
+
+    for i in range(n):
+        soc_now = level_wh / capacity_wh
+        if soc_now <= soc_floor + 1e-9:
+            charging_hold = True
+            battery_limited = True
+        elif soc_now >= soc_resume:
+            charging_hold = False
+
+        # -- choose the target mode -----------------------------------------
+        if charging_hold:
+            target_mode = MODE_STANDBY
+        elif station_index[i] >= 0 and backlog > 0 and link_bps[i] > 0:
+            target_mode = MODE_DOWNLINK
+        elif pointing.feasible[i]:
+            target_mode = MODE_EXPERIMENT
+        else:
+            target_mode = MODE_STANDBY
+
+        target_dcm = {
+            MODE_STANDBY: standby_dcm[i],
+            MODE_EXPERIMENT: pointing.dcm_BN[i],
+            MODE_DOWNLINK: dl_dcm[i],
+        }[target_mode]
+
+        # -- insert a slew if the attitude has to change ---------------------
+        if slew_remaining <= 0:
+            angle = principal_angle(current_dcm, target_dcm)
+            if angle > math.radians(float(cfg.spacecraft.adcs.pointing_accuracy_deg)):
+                slew_remaining = slew_time_s(angle, j_typical, typical_torque,
+                                             slew_margin)
+                slew_count += 1
+
+        if slew_remaining > 0:
+            mode[i] = MODE_SLEW
+            flown[i] = current_dcm
+            # Attitude during a slew is whatever we are rotating away from, so
+            # the array output has to be evaluated for this one sample.
+            cosines = np.clip(sun_hat[i] @ (current_dcm.T @ array.normals.T), 0.0, None)
+            generation[i] = float(cosines @ array.peak_w
+                                  * env.shadow_factor[i] * array_efficiency)
+            load[i] = loads["slew"]
+            slew_remaining -= dt
+            slew_seconds += dt
+            if slew_remaining <= 0:
+                current_dcm = target_dcm
+        else:
+            mode[i] = target_mode
+            current_dcm = target_dcm
+            flown[i] = target_dcm
+            if target_mode == MODE_EXPERIMENT:
+                generation[i] = gen_experiment[i]
+                load[i] = loads["experiment"]
+                experiments[i] = effective_rate * dt
+                backlog += experiments[i] * per_experiment_bytes
+            elif target_mode == MODE_DOWNLINK:
+                generation[i] = gen_downlink[i]
+                load[i] = loads["downlink"]
+                sendable = link_bps[i] * dt / 8.0
+                sent = min(sendable, backlog)
+                downlinked[i] = sent
+                backlog -= sent
+            else:
+                generation[i] = gen_standby[i]
+                load[i] = loads["standby"]
+
+        # Housekeeping and the daily debug images join the queue continuously.
+        backlog += (housekeeping_bps + debug_bytes_per_s) * dt
+
+        delta = (generation[i] - load[i]) * dt / 3600.0
+        if delta > 0:
+            delta *= charge_efficiency
+        level_wh = min(capacity_wh, level_wh + delta)
+        if level_wh < soc_floor * capacity_wh:
+            level_wh = soc_floor * capacity_wh
+            battery_limited = True
+        soc[i] = level_wh / capacity_wh
+        queue[i] = backlog
+
+    return ConopsResult(
+        mode=mode,
+        dcm_BN=flown,
+        generation_w=generation,
+        load_w=load,
+        soc=soc,
+        experiments=experiments,
+        downlinked_bytes=downlinked,
+        queue_bytes=queue,
+        slew_count=slew_count,
+        slew_seconds=slew_seconds,
+        battery_limited=battery_limited,
+    )
+
+
+def summarise(cfg: MissionConfig, env: EnvironmentResult,
+              result: ConopsResult) -> dict[str, float]:
+    days = env.duration_days
+    images_per_experiment = int(cfg.payload.n_cameras)
+    total_experiments = float(np.sum(result.experiments))
+    return {
+        "experiments_per_day": total_experiments / days,
+        "images_per_day": total_experiments * images_per_experiment / days,
+        "downlinked_mb_per_day": float(np.sum(result.downlinked_bytes) / 1e6 / days),
+        "final_queue_mb": float(result.queue_bytes[-1] / 1e6),
+        "queue_growing": bool(result.queue_bytes[-1] > result.queue_bytes[len(result.queue_bytes) // 2]),
+        "min_soc": float(np.min(result.soc)),
+        "mean_soc": float(np.mean(result.soc)),
+        "battery_limited": result.battery_limited,
+        "mean_generation_w": float(np.mean(result.generation_w)),
+        "mean_load_w": float(np.mean(result.load_w)),
+        "energy_margin_w": float(np.mean(result.generation_w - result.load_w)),
+        "slews_per_day": result.slew_count / days,
+        "slew_time_fraction": result.slew_seconds / (days * 86400.0),
+        **{f"frac_{name}": value for name, value in result.mode_fractions().items()},
+    }
