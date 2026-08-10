@@ -180,7 +180,7 @@ def solve_experiment_pointing(cfg: MissionConfig,
 
     # Chunk over samples so the (M, A, R, 3) intermediates stay small enough to
     # live in cache-friendly memory while still being one numpy call each.
-    chunk = max(1, int(2_000_000 / max(1, n_azimuth * n_roll)))
+    chunk = max(1, int(400_000 / max(1, n_azimuth * n_roll)))
     for start in range(0, n_samples, chunk):
         stop = min(n_samples, start + chunk)
         m = stop - start
@@ -295,7 +295,17 @@ def _rotation_between(a: np.ndarray, b: np.ndarray) -> np.ndarray:
     v = np.cross(a, b)
     c = float(np.dot(a, b))
     if np.linalg.norm(v) < 1e-12:
-        return np.eye(3) if c > 0 else -np.eye(3)
+        if c > 0:
+            return np.eye(3)
+        # Antiparallel: a 180 deg turn about any perpendicular axis. Note that
+        # -I is *not* usable here -- it has determinant -1, so it is a
+        # reflection rather than a rotation and would flip the frame handedness.
+        seed = np.array([1.0, 0.0, 0.0])
+        if abs(a[0]) > 0.9:
+            seed = np.array([0.0, 1.0, 0.0])
+        axis = np.cross(a, seed)
+        axis /= np.linalg.norm(axis)
+        return 2.0 * np.outer(axis, axis) - np.eye(3)
     vx = np.array([[0, -v[2], v[1]],
                    [v[2], 0, -v[0]],
                    [-v[1], v[0], 0]])

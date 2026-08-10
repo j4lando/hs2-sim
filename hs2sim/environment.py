@@ -339,6 +339,26 @@ def propagate(cfg: MissionConfig) -> EnvironmentResult:
     return result
 
 
+def station_positions_inertial(cfg: MissionConfig,
+                               env: EnvironmentResult) -> np.ndarray:
+    """(S, N, 3) ground station positions in the inertial frame.
+
+    Built from the same Earth-fixed rotation Basilisk used for access, so the
+    directions here are consistent with the recorded elevation and range.
+    """
+    out = []
+    for station in cfg.stations():
+        lat = math.radians(float(station.latitude_deg))
+        lon = math.radians(float(station.longitude_deg))
+        radius = R_EARTH + float(station.altitude_m)
+        p_fixed = radius * np.array([math.cos(lat) * math.cos(lon),
+                                     math.cos(lat) * math.sin(lon),
+                                     math.sin(lat)])
+        # inertial = dcm_PN^T @ p_fixed
+        out.append(np.einsum("nji,j->ni", env.dcm_PN, p_fixed))
+    return np.stack(out)
+
+
 def summarise(env: EnvironmentResult) -> dict[str, Any]:
     """Headline orbit/environment numbers, for reporting and sanity checks."""
     r = np.linalg.norm(env.r_BN_N, axis=1)

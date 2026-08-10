@@ -222,3 +222,15 @@ payload:
   # Debug images actually downlinked per day: 1 LOST + 1 FOUND [given].
   debug_images_per_day: 2
   storage_gb: 32.0               # [assumed] eMMC available to payload
+
+# ---------------------------------------------------------------------------
+# CONOPS scheduling policy. These are operator choices, not hardware limits.
+# ---------------------------------------------------------------------------
+conops:
+  # Don't spend a multi-minute magnetorquer slew to downlink a trickle of
+  # housekeeping. Only break off science once the backlog is worth a pass.
+  # [assumed] roughly one pass worth of data at a low rate.
+  downlink_trigger_bytes: 500000
+  # Resume science once SOC recovers this far above the DoD floor, so the
+  # scheduler does not chatter at the boundary.
+  soc_resume_margin: 0.10        # [assumed]

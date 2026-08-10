@@ -24,7 +24,7 @@ import math
 
 import numpy as np
 
-from . import comms, power
+from . import comms, environment, power
 from .adcs import TorqueAuthority, inertia_matrix, slew_time_s
 from .config import MissionConfig
 from .environment import EnvironmentResult
@@ -74,25 +74,26 @@ def principal_angle(dcm_a: np.ndarray, dcm_b: np.ndarray) -> float:
 
 def downlink_attitude(env: EnvironmentResult,
                       station_index: np.ndarray,
-                      sun_dcm: np.ndarray) -> np.ndarray:
-    """Attitude that puts the +x or -x S-band patch on the visible station.
+                      sun_dcm: np.ndarray,
+                      station_pos_N: np.ndarray) -> np.ndarray:
+    """Attitude that puts the +x S-band patch on the visible station.
 
-    The remaining freedom about the patch boresight is spent on solar power,
-    approximated by keeping the standby attitude's z axis as close as possible.
+    The +x boresight is aimed at the true spacecraft-to-station vector, which
+    is what justifies the modest antenna pointing loss in the link budget. The
+    remaining freedom -- roll about the boresight -- is spent on solar power by
+    keeping the standby attitude's z axis as close as possible.
     """
     n = env.n_samples
     dcm = sun_dcm.copy()
-    # Station direction is not directly in the recorded messages, but the
-    # spacecraft-to-station unit vector is well approximated by the negative of
-    # the position vector rotated toward the station; we instead use nadir,
-    # since at 10 deg elevation and above the station is within ~70 deg of
-    # nadir and a 5 dBi patch pointed at nadir covers it comfortably.
-    nadir = env.nadir_unit()
     for i in range(n):
-        if station_index[i] < 0:
+        s = int(station_index[i])
+        if s < 0:
             continue
-        target = nadir[i]
-        x_axis = target
+        to_station = station_pos_N[s, i] - env.r_BN_N[i]
+        norm_s = np.linalg.norm(to_station)
+        if norm_s < 1e-9:
+            continue
+        x_axis = to_station / norm_s
         # Keep z as close to the sun-pointing z as possible.
         z_ref = sun_dcm[i, 2, :]
         z_axis = z_ref - np.dot(z_ref, x_axis) * x_axis
@@ -125,7 +126,8 @@ def simulate(cfg: MissionConfig,
     visible = np.isfinite(np.min(ranges, axis=0))
     station_index = np.where(visible, best_station, -1)
 
-    dl_dcm = downlink_attitude(env, station_index, standby_dcm)
+    station_pos_N = environment.station_positions_inertial(cfg, env)
+    dl_dcm = downlink_attitude(env, station_index, standby_dcm, station_pos_N)
 
     # Achievable information rate while a station is up.
     best_range = np.where(visible, np.min(ranges, axis=0), 1e12)
@@ -143,7 +145,9 @@ def simulate(cfg: MissionConfig,
     soc_floor = 1.0 - float(battery.depth_of_discharge_limit)
     charge_efficiency = float(battery.round_trip_efficiency)
     # Hysteresis so the scheduler does not chatter around the floor.
-    soc_resume = soc_floor + 0.10
+    policy = cfg.spacecraft.conops
+    soc_resume = soc_floor + float(policy.soc_resume_margin)
+    downlink_trigger = float(policy.downlink_trigger_bytes)
 
     inertia = inertia_matrix(cfg)
     slew_margin = float(cfg.spacecraft.adcs.settle_margin)
@@ -200,7 +204,8 @@ def simulate(cfg: MissionConfig,
         # -- choose the target mode -----------------------------------------
         if charging_hold:
             target_mode = MODE_STANDBY
-        elif station_index[i] >= 0 and backlog > 0 and link_bps[i] > 0:
+        elif (station_index[i] >= 0 and link_bps[i] > 0
+              and backlog >= downlink_trigger):
             target_mode = MODE_DOWNLINK
         elif pointing.feasible[i]:
             target_mode = MODE_EXPERIMENT

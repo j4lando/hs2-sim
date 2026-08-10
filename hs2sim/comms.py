@@ -168,8 +168,13 @@ def analyse_passes(cfg: MissionConfig,
 
 def pass_statistics(passes: list[Pass], env: EnvironmentResult) -> dict[str, float]:
     days = env.duration_days
+    keys = ("passes_total", "passes_per_day", "mean_pass_duration_min",
+            "max_pass_duration_min", "total_contact_min_per_day",
+            "mean_max_elevation_deg", "mean_bytes_per_pass",
+            "downlink_bytes_per_day", "downlink_mb_per_day")
     if not passes:
-        return {"passes_per_day": 0.0}
+        # Return the full key set so callers never trip over a missing entry.
+        return {key: 0.0 for key in keys}
     durations = np.array([p.duration_s for p in passes])
     capacities = np.array([p.bytes_capacity for p in passes])
     elevations = np.array([p.max_elevation_deg for p in passes])
