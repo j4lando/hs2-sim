@@ -209,8 +209,8 @@ def write_report(cfg: MissionConfig, results: dict, path: pathlib.Path) -> None:
     # -- CONOPS -------------------------------------------------------------
     add("## CONOPS mode split (baseline 0.2 Hz)\n")
     add("| Geometry | Standby | Experiment | Downlink | Slew | Slews/day | "
-        "Energy margin (W) |")
-    add("| --- | --- | --- | --- | --- | --- | --- |")
+        "Energy margin (W) | Peak tracking rate |")
+    add("| --- | --- | --- | --- | --- | --- | --- | --- |")
     for name, entry in results["geometries"].items():
         c = entry["conops_baseline"]
         add(f"| {name} | {_fmt(c['frac_standby'] * 100, '.1f')} % | "
@@ -218,8 +218,15 @@ def write_report(cfg: MissionConfig, results: dict, path: pathlib.Path) -> None:
             f"{_fmt(c['frac_downlink'] * 100, '.1f')} % | "
             f"{_fmt(c['frac_slew'] * 100, '.1f')} % | "
             f"{_fmt(c['slews_per_day'], '.0f')} | "
-            f"{_fmt(c['energy_margin_w'], '.2f')} |")
+            f"{_fmt(c['energy_margin_w'], '.2f')} | "
+            f"{_fmt(c['max_tracking_rate_dps'], '.3f')} deg/s |")
     add("")
+    add("Peak tracking rate is how fast the target attitude moves while "
+        "following a limb or a ground station. Compare it against the rate the "
+        "magnetorquers can sustain: at the mean control torque above, spinning "
+        "up to 0.1 deg/s about the stiff axis takes on the order of a minute, "
+        "so tracking is not the binding constraint -- the discrete slews "
+        "between modes are.\n")
 
     if "raan_sweep" in results:
         add("## Beta angle sweep\n")

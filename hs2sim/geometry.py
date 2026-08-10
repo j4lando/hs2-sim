@@ -107,7 +107,8 @@ def solve_experiment_pointing(cfg: MissionConfig,
                               n_azimuth: int = 72,
                               n_roll: int = 72,
                               array_normals: np.ndarray | None = None,
-                              array_weights: np.ndarray | None = None) -> PointingResult:
+                              array_weights: np.ndarray | None = None,
+                              power_tolerance: float = 0.95) -> PointingResult:
     """Find, for every sample, a legal experiment attitude (if one exists).
 
     When several attitudes are legal we pick the one that puts the most power
@@ -178,6 +179,10 @@ def solve_experiment_pointing(cfg: MissionConfig,
     cos_roll = np.cos(rolls)[None, :, None]                  # (1,R,1)
     sin_roll = np.sin(rolls)[None, :, None]
 
+    # Carried across chunks so continuity holds at chunk boundaries too.
+    prev_x: np.ndarray | None = None
+    prev_z: np.ndarray | None = None
+
     # Chunk over samples so the (M, A, R, 3) intermediates stay small enough to
     # live in cache-friendly memory while still being one numpy call each.
     chunk = max(1, int(400_000 / max(1, n_azimuth * n_roll)))
@@ -214,30 +219,47 @@ def solve_experiment_pointing(cfg: MissionConfig,
         else:
             score = np.zeros_like(earth_angle)
 
-        score = np.where(ok, score, -np.inf)
-        score = score.reshape(m, n_azimuth * n_roll)
-        best_flat = np.argmax(score, axis=1)
-        best_val = score[np.arange(m), best_flat]
-        good = np.isfinite(best_val)
-        if not good.any():
-            continue
+        score = np.where(ok, score, -np.inf).reshape(m, n_azimuth * n_roll)
+        x_grid = np.repeat(x_hat, n_roll, axis=1).reshape(m, n_azimuth * n_roll, 3)
+        z_grid = z_all.reshape(m, n_azimuth * n_roll, 3)
 
-        a_index = best_flat // n_roll
-        r_index = best_flat % n_roll
-        rows = np.arange(m)
-        chosen_x = x_hat[rows, a_index]                                # (M,3)
-        chosen_z = z_all.reshape(m, n_azimuth, n_roll, 3)[rows, a_index, r_index]
-        chosen_y = np.cross(chosen_z, chosen_x)
+        # Select sequentially so the attitude profile is temporally coherent.
+        # Optimising each sample independently produces a globally optimal but
+        # unflyable answer: consecutive samples can pick limb points on
+        # opposite sides of the Earth, implying an instantaneous 100 deg
+        # reorientation. Instead, among candidates within `power_tolerance` of
+        # the best available power, take the one closest to the attitude we are
+        # already holding. Feasibility -- the thing the reject codes report --
+        # is unaffected; only the choice among legal attitudes changes.
+        for local in range(m):
+            row = score[local]
+            best_val = row.max()
+            if not np.isfinite(best_val):
+                continue
+            i = start + local
+            if best_val <= 0:
+                near_best = np.flatnonzero(np.isfinite(row))
+            else:
+                near_best = np.flatnonzero(row >= best_val * power_tolerance)
 
-        idx = np.arange(start, stop)[good]
-        feasible[idx] = True
-        reject[idx] = REJECT_OK
-        best_x[idx] = chosen_x[good]
-        best_z[idx] = chosen_z[good]
-        best_roll[idx] = rolls[r_index[good]]
-        best_power[idx] = best_val[good]
-        best_dcm[idx] = np.stack([chosen_x[good], chosen_y[good], chosen_z[good]],
-                                 axis=1)
+            if prev_x is None:
+                pick = near_best[int(np.argmax(row[near_best]))]
+            else:
+                alignment = (x_grid[local, near_best] @ prev_x
+                             + z_grid[local, near_best] @ prev_z)
+                pick = near_best[int(np.argmax(alignment))]
+
+            chosen_x = x_grid[local, pick]
+            chosen_z = z_grid[local, pick]
+            feasible[i] = True
+            reject[i] = REJECT_OK
+            best_x[i] = chosen_x
+            best_z[i] = chosen_z
+            best_roll[i] = rolls[pick % n_roll]
+            best_power[i] = row[pick]
+            best_dcm[i] = np.vstack([chosen_x, np.cross(chosen_z, chosen_x),
+                                     chosen_z])
+            prev_x, prev_z = chosen_x, chosen_z
 
     return PointingResult(
         feasible=feasible,

@@ -14,10 +14,14 @@ Mode priority, highest first:
     DOWNLINK  when a station is visible and there is data queued
     EXPERIMENT when the pointing constraints are satisfiable and SOC allows
     STANDBY   otherwise (sun-pointing, charging)
-SLEW is inserted whenever the *mode* changes. Attitude drift within a mode --
-tracking the limb, or following a ground station across the sky -- is a slew
-*rate* requirement rather than a reorientation, and is reported separately so
-it can be checked against actuator authority.
+SLEW is inserted whenever the attitude has to change by more than
+``intra_mode_slew_threshold_deg``. That covers mode changes, but also genuine
+repoints *inside* experiment mode: when the sunlit-limb and Sun keep-out
+constraints make the limb point currently being held illegal, the nearest legal
+attitude can be on the far side of Earth. Smooth drift below the threshold --
+following the limb, or a station across the sky -- is treated as a slew *rate*
+requirement instead, and reported separately so it can be checked against
+actuator authority.
 """
 
 from __future__ import annotations
@@ -152,6 +156,8 @@ def simulate(cfg: MissionConfig,
     policy = cfg.spacecraft.conops
     soc_resume = soc_floor + float(policy.soc_resume_margin)
     downlink_trigger = float(policy.downlink_trigger_bytes)
+    intra_mode_slew_threshold = math.radians(
+        float(policy.intra_mode_slew_threshold_deg))
 
     inertia = inertia_matrix(cfg)
     slew_margin = float(cfg.spacecraft.adcs.settle_margin)
@@ -225,20 +231,30 @@ def simulate(cfg: MissionConfig,
             MODE_DOWNLINK: dl_dcm[i],
         }[target_mode]
 
-        # -- insert a slew only on a genuine mode change ----------------------
-        # Within a mode the target attitude drifts continuously as the limb or
-        # the ground station moves. That is a tracking *rate* requirement, not a
-        # reorientation, so it must not be charged as a fresh slew every sample;
-        # doing so would pin the vehicle in SLEW for the whole pass. Tracking
-        # rates are checked separately against actuator authority below.
-        if slew_remaining <= 0 and target_mode != current_mode:
+        # -- decide between tracking and slewing ------------------------------
+        # Two different things move the target attitude, and they cost
+        # different amounts:
+        #   * Smooth drift within a mode -- following the limb, or a station
+        #     across the sky. That is a slew *rate* requirement, not a
+        #     reorientation, and charging it as a slew every sample would pin
+        #     the vehicle in SLEW for whole passes.
+        #   * A genuine repoint. These happen inside experiment mode too: when
+        #     the sunlit-limb and Sun keep-out constraints make the currently
+        #     held limb point illegal, the only legal attitudes can be on the
+        #     far side of Earth, which is a >100 deg reorientation.
+        # Anything above the threshold is treated as a real slew.
+        if slew_remaining <= 0:
             angle = principal_angle(current_dcm, target_dcm)
-            if angle > math.radians(float(cfg.spacecraft.adcs.pointing_accuracy_deg)):
+            mode_changed = target_mode != current_mode
+            needs_slew = angle > intra_mode_slew_threshold or (
+                mode_changed
+                and angle > math.radians(float(cfg.spacecraft.adcs.pointing_accuracy_deg)))
+            if needs_slew:
                 slew_remaining = slew_time_s(angle, j_typical, typical_torque,
                                              slew_margin)
                 slew_count += 1
                 pending_mode = target_mode
-            else:
+            elif mode_changed:
                 current_mode = target_mode
 
         if slew_remaining > 0:

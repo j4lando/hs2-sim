@@ -234,3 +234,8 @@ conops:
   # Resume science once SOC recovers this far above the DoD floor, so the
   # scheduler does not chatter at the boundary.
   soc_resume_margin: 0.10        # [assumed]
+  # Attitude change above this is treated as a real reorientation (costing a
+  # magnetorquer-limited slew) rather than smooth target tracking. Repoints
+  # this large do occur inside experiment mode when the sunlit-limb and Sun
+  # keep-out constraints force a switch to the far side of Earth.
+  intra_mode_slew_threshold_deg: 5.0   # [assumed]
