@@ -14,7 +14,10 @@ Mode priority, highest first:
     DOWNLINK  when a station is visible and there is data queued
     EXPERIMENT when the pointing constraints are satisfiable and SOC allows
     STANDBY   otherwise (sun-pointing, charging)
-and SLEW is inserted whenever the target attitude changes.
+SLEW is inserted whenever the *mode* changes. Attitude drift within a mode --
+tracking the limb, or following a ground station across the sky -- is a slew
+*rate* requirement rather than a reorientation, and is reported separately so
+it can be checked against actuator authority.
 """
 
 from __future__ import annotations
@@ -55,6 +58,7 @@ class ConopsResult:
     experiments: np.ndarray         # (N,) experiments completed in that sample
     downlinked_bytes: np.ndarray    # (N,) information bytes sent
     queue_bytes: np.ndarray         # (N,) backlog awaiting downlink
+    tracking_rate: np.ndarray       # (N,) rad/s the target attitude moves
     slew_count: int
     slew_seconds: float
     battery_limited: bool
@@ -163,6 +167,7 @@ def simulate(cfg: MissionConfig,
     experiments = np.zeros(n)
     downlinked = np.zeros(n)
     queue = np.zeros(n)
+    tracking_rate = np.zeros(n)   # rad/s the target attitude is moving
 
     img_bytes = comms.image_bytes(cfg)
     per_experiment_bytes = (int(cfg.payload.numerical_bytes_per_experiment)
@@ -177,6 +182,8 @@ def simulate(cfg: MissionConfig,
     level_wh = float(battery.initial_soc) * capacity_wh
     backlog = 0.0
     current_dcm = standby_dcm[0]
+    current_mode = MODE_STANDBY
+    pending_mode = MODE_STANDBY
     slew_remaining = 0.0
     slew_count = 0
     slew_seconds = 0.0
@@ -218,13 +225,21 @@ def simulate(cfg: MissionConfig,
             MODE_DOWNLINK: dl_dcm[i],
         }[target_mode]
 
-        # -- insert a slew if the attitude has to change ---------------------
-        if slew_remaining <= 0:
+        # -- insert a slew only on a genuine mode change ----------------------
+        # Within a mode the target attitude drifts continuously as the limb or
+        # the ground station moves. That is a tracking *rate* requirement, not a
+        # reorientation, so it must not be charged as a fresh slew every sample;
+        # doing so would pin the vehicle in SLEW for the whole pass. Tracking
+        # rates are checked separately against actuator authority below.
+        if slew_remaining <= 0 and target_mode != current_mode:
             angle = principal_angle(current_dcm, target_dcm)
             if angle > math.radians(float(cfg.spacecraft.adcs.pointing_accuracy_deg)):
                 slew_remaining = slew_time_s(angle, j_typical, typical_torque,
                                              slew_margin)
                 slew_count += 1
+                pending_mode = target_mode
+            else:
+                current_mode = target_mode
 
         if slew_remaining > 0:
             mode[i] = MODE_SLEW
@@ -239,16 +254,20 @@ def simulate(cfg: MissionConfig,
             slew_seconds += dt
             if slew_remaining <= 0:
                 current_dcm = target_dcm
+                current_mode = pending_mode
         else:
-            mode[i] = target_mode
+            mode[i] = current_mode
+            # Continuous tracking within the mode: record how fast the target
+            # attitude is moving so it can be checked against actuator limits.
+            tracking_rate[i] = principal_angle(current_dcm, target_dcm) / dt
             current_dcm = target_dcm
             flown[i] = target_dcm
-            if target_mode == MODE_EXPERIMENT:
+            if current_mode == MODE_EXPERIMENT:
                 generation[i] = gen_experiment[i]
                 load[i] = loads["experiment"]
                 experiments[i] = effective_rate * dt
                 backlog += experiments[i] * per_experiment_bytes
-            elif target_mode == MODE_DOWNLINK:
+            elif current_mode == MODE_DOWNLINK:
                 generation[i] = gen_downlink[i]
                 load[i] = loads["downlink"]
                 sendable = link_bps[i] * dt / 8.0
@@ -281,6 +300,7 @@ def simulate(cfg: MissionConfig,
         experiments=experiments,
         downlinked_bytes=downlinked,
         queue_bytes=queue,
+        tracking_rate=tracking_rate,
         slew_count=slew_count,
         slew_seconds=slew_seconds,
         battery_limited=battery_limited,
@@ -306,5 +326,7 @@ def summarise(cfg: MissionConfig, env: EnvironmentResult,
         "energy_margin_w": float(np.mean(result.generation_w - result.load_w)),
         "slews_per_day": result.slew_count / days,
         "slew_time_fraction": result.slew_seconds / (days * 86400.0),
+        "max_tracking_rate_dps": float(np.degrees(np.max(result.tracking_rate))),
+        "mean_tracking_rate_dps": float(np.degrees(np.mean(result.tracking_rate))),
         **{f"frac_{name}": value for name, value in result.mode_fractions().items()},
     }
