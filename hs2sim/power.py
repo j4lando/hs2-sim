@@ -203,6 +203,23 @@ def orbit_average_generation(cfg: MissionConfig,
     gen = generation_w(cfg, env, array, dcm_BN)
     cosines = per_panel_cosine(cfg, env, array, dcm_BN)
     sunlit = env.shadow_factor > 0.5
+
+    # Per-panel incidence, reported separately because a multi-panel array with
+    # widely separated normals has no single meaningful "the" incidence angle.
+    panels = {}
+    for k, name in enumerate(array.panel_names):
+        column = cosines[sunlit, k] if sunlit.any() else np.zeros(1)
+        illuminated = column > 0
+        panels[name] = {
+            "peak_w": float(array.peak_w[k]),
+            "mean_cosine_sunlit": float(np.mean(column)),
+            "mean_incidence_deg": float(np.degrees(np.arccos(
+                np.clip(np.mean(column[illuminated]) if illuminated.any() else 0.0,
+                        0, 1)))),
+            "fraction_of_time_illuminated": float(np.mean(illuminated)),
+            "mean_power_w": float(np.mean(cosines[:, k]) * array.peak_w[k]),
+        }
+
     return {
         "peak_capability_w": array.peak_total_w,
         "orbit_average_w": float(np.mean(gen)),
@@ -212,4 +229,5 @@ def orbit_average_generation(cfg: MissionConfig,
         "mean_incidence_deg": float(np.degrees(np.arccos(np.clip(
             np.mean(cosines[sunlit]) if sunlit.any() else 0.0, 0, 1)))),
         "energy_wh_per_day": float(np.mean(gen) * 24.0),
+        "per_panel": panels,
     }

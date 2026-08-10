@@ -278,7 +278,25 @@ def sun_pointing_attitude(env: EnvironmentResult,
                      np.cos(pp)], axis=-1).reshape(-1, 3)
     output = np.clip(dirs @ normals.T, 0, None) @ weights
     best_body_dir = dirs[int(np.argmax(output))]
-    best_fraction = float(np.max(output))
+
+    # Refine off the grid. For a fixed set of illuminated panels the objective
+    # sum_k w_k (d . n_k) is linear in d, so the exact optimum is the
+    # power-weighted sum of those normals. Iterate in case the refinement
+    # changes which panels are lit.
+    for _ in range(8):
+        active = (normals @ best_body_dir) > 0
+        if not active.any():
+            break
+        candidate = (weights[active, None] * normals[active]).sum(axis=0)
+        norm = np.linalg.norm(candidate)
+        if norm < 1e-12:
+            break
+        candidate /= norm
+        if np.clip(normals @ candidate, 0, None) @ weights <= \
+                np.clip(normals @ best_body_dir, 0, None) @ weights + 1e-12:
+            break
+        best_body_dir = candidate
+    best_fraction = float(np.clip(normals @ best_body_dir, 0, None) @ weights)
 
     # Build a DCM that maps best_body_dir onto the Sun direction.
     dcm = np.zeros((n_samples, 3, 3))

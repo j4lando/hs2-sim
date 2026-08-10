@@ -101,6 +101,18 @@ def write_report(cfg: MissionConfig, results: dict, path: pathlib.Path) -> None:
             f"{_fmt(experiment['orbit_average_w'], '.2f')} |")
     add("")
 
+    add("### Per-panel incidence (sun-pointing standby attitude)\n")
+    add("| Geometry | Panel | Peak (W) | Mean incidence | Illuminated | "
+        "Mean output (W) |")
+    add("| --- | --- | --- | --- | --- | --- |")
+    for name, entry in results["geometries"].items():
+        for panel, data in entry["power_standby"].get("per_panel", {}).items():
+            add(f"| {name} | {panel} | {_fmt(data['peak_w'], '.1f')} | "
+                f"{_fmt(data['mean_incidence_deg'], '.1f')} deg | "
+                f"{_fmt(data['fraction_of_time_illuminated'] * 100, '.0f')} % | "
+                f"{_fmt(data['mean_power_w'], '.2f')} |")
+    add("")
+
     add("### Experiment-mode pointing feasibility\n")
     add("| Geometry | Feasible | No sunlit limb | Sun in FOUND | No legal roll |")
     add("| --- | --- | --- | --- | --- |")
