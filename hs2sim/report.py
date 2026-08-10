@@ -192,9 +192,43 @@ def write_report(cfg: MissionConfig, results: dict, path: pathlib.Path) -> None:
         f"{_fmt(data['max_experiments_per_day_downlink_limited'], ',.0f')} "
         f"experiments/day.\n")
 
+    if "binding_constraints" in results:
+        add("### What actually limits the image count\n")
+        add("Time in experiment mode is a multiplier on cadence rather than a "
+            "ceiling of its own, and it is already folded into the USB column "
+            "-- that column is the most images the cameras could produce if "
+            "run flat out for exactly the time a legal attitude exists. "
+            "Storage and downlink are genuine rate-independent ceilings. The "
+            "smallest of the three binds.\n")
+        add("| Geometry | Time in experiment mode | USB 2.0 | Storage | "
+            "Downlink | Binding constraint | Max images/day | Cadence needed |")
+        add("| --- | --- | --- | --- | --- | --- | --- | --- |")
+        for name, row in results["binding_constraints"].items():
+            add(f"| {name} | "
+                f"{_fmt(row['experiment_time_fraction'] * 100, '.1f')} % "
+                f"({_fmt(row['experiment_seconds_per_day'] / 3600, '.1f')} h/day) | "
+                f"{_fmt(row['ceiling_usb2'], ',.0f')} | "
+                f"{_fmt(row['ceiling_storage'], ',.0f')} | "
+                f"{_fmt(row['ceiling_downlink'], ',.0f')} | "
+                f"{row['binding_constraint']} | "
+                f"**{_fmt(row['binding_value_images_per_day'], ',.0f')}** | "
+                f"{_fmt(row['required_rate_hz'], '.2f')} Hz |")
+        add("")
+        add("Two things follow. First, downlink capacity is **not** the "
+            "constraint on science volume, and it is not close: only two debug "
+            "images come down per day, so what is actually transmitted is "
+            "numerical data plus housekeeping, three orders of magnitude below "
+            "what the Leaf Space contacts can carry. Sizing the radio against "
+            "image volume would be sizing against the wrong thing. Second, "
+            "on-board storage is what binds, and energy plus attitude "
+            "feasibility decide how hard the cameras must be driven to reach "
+            "it -- geometry B needs 1.2 Hz, geometry A needs 4.2 Hz to hit the "
+            "same storage ceiling because it has far less time in experiment "
+            "mode.\n")
+
     add("### Achieved cadence from the CONOPS scheduler\n")
     add("| Geometry | Requested (Hz) | Experiments/day | Images/day | "
-        "Min SOC | Downlink (MB/day) | Backlog growing |")
+        "Min SOC | Downlink (MB/day) | Backlog growth (MB/day) |")
     add("| --- | --- | --- | --- | --- | --- | --- |")
     for name, entry in results["geometries"].items():
         for row in entry["payload_rate_sweep"]:
@@ -203,7 +237,7 @@ def write_report(cfg: MissionConfig, results: dict, path: pathlib.Path) -> None:
                 f"{_fmt(row['images_per_day'], ',.0f')} | "
                 f"{_fmt(row['min_soc'] * 100, '.0f')} % | "
                 f"{_fmt(row['downlinked_mb_per_day'], '.1f')} | "
-                f"{_fmt(row['queue_growing'])} |")
+                f"{_fmt(row['backlog_growth_mb_per_day'], '+.2f')} |")
     add("")
 
     # -- CONOPS -------------------------------------------------------------
@@ -215,7 +249,7 @@ def write_report(cfg: MissionConfig, results: dict, path: pathlib.Path) -> None:
         c = entry["conops_baseline"]
         add(f"| {name} | {_fmt(c['frac_standby'] * 100, '.1f')} % | "
             f"{_fmt(c['frac_experiment'] * 100, '.1f')} % | "
-            f"{_fmt(c['frac_downlink'] * 100, '.1f')} % | "
+            f"{_fmt(c['frac_downlink'] * 100, '.2f')} % | "
             f"{_fmt(c['frac_slew'] * 100, '.1f')} % | "
             f"{_fmt(c['slews_per_day'], '.0f')} | "
             f"{_fmt(c['energy_margin_w'], '.2f')} | "

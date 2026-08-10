@@ -238,6 +238,48 @@ def main() -> int:
             cfg, max_exp_downlink, contact_s_per_day).__dict__,
     }
 
+    # ------------------------------------------------- binding constraints
+    # The direct answer to "how many images can I take". Each entry is the
+    # ceiling that one subsystem alone would impose; the smallest one binds.
+    log("Identifying the binding constraint on payload throughput...")
+    images_per_experiment = int(cfg.payload.n_cameras)
+    storage_experiments = (float(cfg.payload.storage_gb) * 1e9
+                           / (images_per_experiment * img_b))
+    constraint_rows = {}
+    for name, entry in per_geometry.items():
+        baseline = entry["conops_baseline"]
+        exp_fraction = float(baseline["frac_experiment"])
+        exp_seconds = exp_fraction * 86400.0
+        constraint_rows[name] = {
+            "experiment_time_fraction": exp_fraction,
+            "experiment_seconds_per_day": exp_seconds,
+            # Ceilings, expressed as images per day.
+            "ceiling_usb2": usb_fps * exp_seconds * images_per_experiment,
+            "ceiling_storage": storage_experiments * images_per_experiment,
+            "ceiling_downlink": max_exp_downlink * images_per_experiment,
+            "achieved_at_0p2hz": float(baseline["images_per_day"]),
+            "energy_margin_w": float(baseline["energy_margin_w"]),
+            "battery_limited": bool(baseline["battery_limited"]),
+        }
+        # Time in experiment mode is a multiplier on the cadence, not a ceiling
+        # in its own right -- it is already folded into the USB figure, which
+        # is the fastest the cameras could run for exactly that long. The
+        # genuine rate-independent ceilings are storage and downlink.
+        ceilings = {
+            "USB 2.0 bus over the available experiment time":
+                constraint_rows[name]["ceiling_usb2"],
+            "on-board storage": constraint_rows[name]["ceiling_storage"],
+            "downlink capacity": constraint_rows[name]["ceiling_downlink"],
+        }
+        binding = min(ceilings, key=ceilings.get)
+        constraint_rows[name]["binding_constraint"] = binding
+        constraint_rows[name]["binding_value_images_per_day"] = ceilings[binding]
+        # Cadence you would have to command to reach that ceiling.
+        constraint_rows[name]["required_rate_hz"] = (
+            ceilings[binding] / images_per_experiment / exp_seconds
+            if exp_seconds > 0 else float("inf"))
+    results["binding_constraints"] = constraint_rows
+
     # --------------------------------------------------------- power modes
     results["power_modes"] = {
         "mode_loads_w": power.mode_power_table(cfg),

@@ -215,15 +215,19 @@ def simulate(cfg: MissionConfig,
             charging_hold = False
 
         # -- choose the target mode -----------------------------------------
-        if charging_hold:
-            target_mode = MODE_STANDBY
-        elif (station_index[i] >= 0 and link_bps[i] > 0
-              and backlog >= downlink_trigger):
+        # Science is the discretionary activity; downlink is not. A low battery
+        # suspends experiments but must not suspend downlink, or the vehicle
+        # deadlocks: it stops sending, the backlog grows without bound, and the
+        # mission silently fails while the model reports a healthy SOC.
+        # Contacts are scarce (a few minutes each), so a pass is spent even at
+        # the cost of discharging.
+        if (station_index[i] >= 0 and link_bps[i] > 0
+                and backlog >= downlink_trigger):
             target_mode = MODE_DOWNLINK
-        elif pointing.feasible[i]:
-            target_mode = MODE_EXPERIMENT
-        else:
+        elif charging_hold or not pointing.feasible[i]:
             target_mode = MODE_STANDBY
+        else:
+            target_mode = MODE_EXPERIMENT
 
         target_dcm = {
             MODE_STANDBY: standby_dcm[i],
@@ -333,7 +337,12 @@ def summarise(cfg: MissionConfig, env: EnvironmentResult,
         "images_per_day": total_experiments * images_per_experiment / days,
         "downlinked_mb_per_day": float(np.sum(result.downlinked_bytes) / 1e6 / days),
         "final_queue_mb": float(result.queue_bytes[-1] / 1e6),
-        "queue_growing": bool(result.queue_bytes[-1] > result.queue_bytes[len(result.queue_bytes) // 2]),
+        # Net growth of the downlink backlog. A positive number means data is
+        # being generated faster than contacts can clear it, so the mission is
+        # downlink-bound at this cadence; the sign is what matters, not noise
+        # from where in a pass the run happens to end.
+        "backlog_growth_mb_per_day": float(
+            (result.queue_bytes[-1] - result.queue_bytes[0]) / 1e6 / days),
         "min_soc": float(np.min(result.soc)),
         "mean_soc": float(np.mean(result.soc)),
         "battery_limited": result.battery_limited,

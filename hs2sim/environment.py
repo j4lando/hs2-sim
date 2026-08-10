@@ -17,9 +17,11 @@ Two implementation notes worth knowing:
    anything in this analysis is sensitive to.
 
 2. **Gravity uses the real J2.** Earth is a spherical-harmonic body built from
-   the bundled GGM03S coefficients (degree/order 4), so nodal regression is
+   the bundled GGM03S zonal coefficients (J2 through J4), so nodal regression is
    modelled properly. That matters here because RAAN drift is what moves the
-   beta angle, which drives both eclipse fraction and array output.
+   beta angle, which drives both eclipse fraction and array output. Only zonal
+   terms are used, because tesseral and sectoral terms would require a genuine
+   Earth-orientation ephemeris rather than the origin-pinned one used here.
 """
 
 from __future__ import annotations
@@ -216,9 +218,15 @@ def propagate(cfg: MissionConfig) -> EnvironmentResult:
     grav_factory = simIncludeGravBody.gravBodyFactory()
     earth = grav_factory.createEarth()
     earth.isCentralBody = True
-    ggm03s = f"{bsk_root}/supportData/LocalGravData/GGM03S.txt"
+    # Zonal-only harmonics (J2 through J4). This is deliberate: tesseral and
+    # sectoral terms are only meaningful if the gravity model is told how Earth
+    # is oriented, and the orientation message here belongs to a planet pinned
+    # at the origin whose implied orbital velocity is not physical. Zonal terms
+    # need no orientation, and J2 is what actually matters for this analysis --
+    # it drives the nodal regression that moves the beta angle.
+    ggm03s_j2 = f"{bsk_root}/supportData/LocalGravData/GGM03S-J2-only.txt"
     try:
-        earth.useSphericalHarmonicsGravityModel(ggm03s, 4)
+        earth.useSphericalHarmonicsGravityModel(ggm03s_j2, 4)
     except Exception:  # pragma: no cover - falls back to point mass
         pass
     grav_factory.addBodiesTo(sc)

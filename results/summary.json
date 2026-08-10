@@ -1,0 +1,1324 @@
+{
+  "orbit": {
+    "duration_days": 3.000057870370371,
+    "time_step_s": 5.0,
+    "mean_altitude_km": 408.2548198824795,
+    "orbit_period_min": 92.74546007899751,
+    "orbits": 46.5790993577515,
+    "eclipse_fraction": 0.3891514438378889,
+    "beta_angle_deg_mean": 6.37467668326296,
+    "beta_angle_deg_min": 2.96068194130624e-05,
+    "beta_angle_deg_max": 12.836906339536888,
+    "b_field_nt_mean": 35582.885071903176,
+    "earth_angular_radius_deg": 70.02507761492642
+  },
+  "comms": {
+    "aggregate": {
+      "passes_total": 184,
+      "passes_per_day": 61.332150228583544,
+      "mean_pass_duration_min": 5.137228260869565,
+      "max_pass_duration_min": 6.583333333333333,
+      "total_contact_min_per_day": 315.07725545417713,
+      "mean_max_elevation_deg": 34.057688408561646,
+      "mean_bytes_per_pass": 16826019.02173913,
+      "downlink_bytes_per_day": 1031975926.3903086,
+      "downlink_mb_per_day": 1031.9759263903086
+    },
+    "per_station": [
+      {
+        "station": "Madrid, Spain",
+        "passes_per_day": 5.999884261491869,
+        "mean_duration_min": 4.708333333333333,
+        "contact_min_per_day": 28.249455064524213,
+        "bytes_per_day": 91584899.98263921
+      },
+      {
+        "station": "Sofia, Bulgaria",
+        "passes_per_day": 5.999884261491869,
+        "mean_duration_min": 5.296296296296296,
+        "contact_min_per_day": 31.77716479234582,
+        "bytes_per_day": 104762979.10919927
+      },
+      {
+        "station": "Lomazzo, Italy",
+        "passes_per_day": 5.3332304546594385,
+        "mean_duration_min": 5.744791666666667,
+        "contact_min_per_day": 30.638297872340424,
+        "bytes_per_day": 102403024.63301246
+      },
+      {
+        "station": "Spaceport Nova Scotia",
+        "passes_per_day": 5.3332304546594385,
+        "mean_duration_min": 5.765625,
+        "contact_min_per_day": 30.749406840145827,
+        "bytes_per_day": 103073845.02613759
+      },
+      {
+        "station": "Santa Maria, Azores",
+        "passes_per_day": 4.666576647827009,
+        "mean_duration_min": 4.767857142857142,
+        "contact_min_per_day": 22.249570803032345,
+        "bytes_per_day": 71178626.95549853
+      },
+      {
+        "station": "Vancouver, BC, Canada",
+        "passes_per_day": 4.666576647827009,
+        "mean_duration_min": 6.0357142857142865,
+        "contact_min_per_day": 28.16612333867016,
+        "bytes_per_day": 95043166.60558245
+      },
+      {
+        "station": "Auckland, New Zealand",
+        "passes_per_day": 4.666576647827009,
+        "mean_duration_min": 4.761904761904762,
+        "contact_min_per_day": 22.221793561080997,
+        "bytes_per_day": 71481121.12034875
+      },
+      {
+        "station": "Dublin, Ireland",
+        "passes_per_day": 4.333249744410794,
+        "mean_duration_min": 5.455128205128205,
+        "contact_min_per_day": 23.63843290059991,
+        "bytes_per_day": 78028494.82070175
+      },
+      {
+        "station": "Vilnius, Lithuania",
+        "passes_per_day": 3.999922840994579,
+        "mean_duration_min": 5.326388888888888,
+        "contact_min_per_day": 21.305144576686402,
+        "bytes_per_day": 70615304.48872513
+      },
+      {
+        "station": "Perth, W. Australia",
+        "passes_per_day": 3.999922840994579,
+        "mean_duration_min": 4.784722222222222,
+        "contact_min_per_day": 19.138519704481006,
+        "bytes_per_day": 61626311.22084835
+      },
+      {
+        "station": "Adelaide, S. Australia",
+        "passes_per_day": 3.999922840994579,
+        "mean_duration_min": 5.041666666666667,
+        "contact_min_per_day": 20.166277656681004,
+        "bytes_per_day": 64717918.25003374
+      },
+      {
+        "station": "Shetland, Scotland",
+        "passes_per_day": 2.9999421307459344,
+        "mean_duration_min": 3.111111111111111,
+        "contact_min_per_day": 9.333153295654018,
+        "bytes_per_day": 27696965.722111836
+      },
+      {
+        "station": "Colombo, Sri Lanka",
+        "passes_per_day": 2.6666152273297192,
+        "mean_duration_min": 5.09375,
+        "contact_min_per_day": 13.583071314210757,
+        "bytes_per_day": 44157481.53006307
+      },
+      {
+        "station": "Alcantara, Brazil",
+        "passes_per_day": 2.6666152273297192,
+        "mean_duration_min": 5.197916666666667,
+        "contact_min_per_day": 13.860843733724272,
+        "bytes_per_day": 45605786.92540652
+      },
+      {
+        "station": "Reykjavik, Iceland",
+        "passes_per_day": 0.0,
+        "mean_duration_min": 0.0,
+        "contact_min_per_day": 0.0,
+        "bytes_per_day": 0.0
+      }
+    ],
+    "link_margin_10deg_1695km_at_9k6": 24.412247564600627,
+    "link_margin_10deg_1695km_at_256k": 10.152560241877815,
+    "link_margin_worst_case_pointing_at_9k6": 17.412247564600627,
+    "eirp_dbw": 1.0102999566398125,
+    "ground_gt_db_per_k": 12.8
+  },
+  "adcs": {
+    "dipole_am2": [
+      0.2,
+      0.2,
+      0.2
+    ],
+    "b_field_nt_mean": 35582.88507190318,
+    "b_field_nt_min": 26086.434792097734,
+    "b_field_nt_max": 48048.02852209525,
+    "torque_nm_mean": 8.919326149483394e-06,
+    "torque_nm_min": 1.2709603526511214e-06,
+    "torque_nm_median": 9.029995242599677e-06,
+    "slew_times": {
+      "10deg": {
+        "angle_deg": 10,
+        "best_s": 93.42015599685857,
+        "mean_s": 119.64681160353777,
+        "p10_s": 161.80217507116674,
+        "median_s": 118.42703860318642
+      },
+      "30deg": {
+        "angle_deg": 30,
+        "best_s": 161.80845663756935,
+        "mean_s": 207.23435666094895,
+        "p10_s": 280.24958799841517,
+        "median_s": 205.12164785063965
+      },
+      "60deg": {
+        "angle_deg": 60,
+        "best_s": 228.83171388350942,
+        "mean_s": 293.0736377795771,
+        "p10_s": 396.33276819683095,
+        "median_s": 290.0858163266926
+      },
+      "90deg": {
+        "angle_deg": 90,
+        "best_s": 280.26046799057565,
+        "mean_s": 358.9404348106134,
+        "p10_s": 485.4065252135002,
+        "median_s": 355.28111580955925
+      },
+      "180deg": {
+        "angle_deg": 180,
+        "best_s": 396.34815482930276,
+        "mean_s": 507.6184309932652,
+        "p10_s": 686.4684912213297,
+        "median_s": 502.44337243292495
+      }
+    },
+    "disturbances": {
+      "gravity_gradient_nm_mean": 7.651955308245428e-08,
+      "gravity_gradient_nm_max": 7.656348300989732e-08,
+      "residual_dipole_nm_mean": 1.7791442535951588e-07,
+      "aero_nm_mean": 7.753938598659614e-08,
+      "total_disturbance_nm_mean": 3.319733644285663e-07,
+      "total_disturbance_nm_max": 3.942887888929372e-07,
+      "control_authority_nm_mean": 8.919326149483394e-06,
+      "authority_margin_mean": 26.867595732677056,
+      "authority_margin_worst": 3.2234250337668877
+    },
+    "detumble": {
+      "initial_rate_dps": 10.0,
+      "initial_momentum_nms": 0.008726646259971648,
+      "effective_torque_nm": 3.567730459793358e-06,
+      "detumble_hours": 0.6794426969373918
+    },
+    "momentum_management": {
+      "secular_disturbance_nm": 2.707577219626029e-07,
+      "momentum_per_orbit_nms": 0.0015066929696017737,
+      "removal_seconds_per_orbit": 168.92452909001886,
+      "duty_cycle": 0.030356297933817018
+    }
+  },
+  "payload_limits": {
+    "image_bytes_compressed": 655360,
+    "image_bytes_raw": 1310720,
+    "usb2_max_experiments_per_s": 13.73291015625,
+    "usb2_max_experiments_per_day": 1186523.4375
+  },
+  "geometries": {
+    "A_2panel_90": {
+      "description": "2-panel deployable on +y, rotated 90 deg so cells face -x",
+      "peak_total_w": 14.8,
+      "panels": [
+        "deployable"
+      ],
+      "standby_best_cosine_sum_w": 14.8,
+      "power_standby": {
+        "peak_capability_w": 14.8,
+        "orbit_average_w": 8.239111209678082,
+        "sunlit_average_w": 13.481347966340593,
+        "peak_achieved_w": 13.488720278157441,
+        "capacity_factor": 0.5566967033566271,
+        "mean_incidence_deg": 1.8943738794993599,
+        "energy_wh_per_day": 197.73866903227398,
+        "per_panel": {
+          "deployable": {
+            "peak_w": 14.8,
+            "mean_cosine_sunlit": 0.999453466773763,
+            "mean_incidence_deg": 1.8943738794993599,
+            "fraction_of_time_illuminated": 1.0,
+            "mean_power_w": 9.040060576780865
+          }
+        }
+      },
+      "power_experiment": {
+        "peak_capability_w": 14.8,
+        "orbit_average_w": 4.320083804053072,
+        "sunlit_average_w": 7.07226653885481,
+        "peak_achieved_w": 13.341585327438134,
+        "capacity_factor": 0.2918975543279102,
+        "mean_incidence_deg": 58.378216772398126,
+        "energy_wh_per_day": 103.68201129727372,
+        "per_panel": {
+          "deployable": {
+            "peak_w": 14.8,
+            "mean_cosine_sunlit": 0.5243096853411449,
+            "mean_incidence_deg": 47.10483946669216,
+            "fraction_of_time_illuminated": 0.770297154766792,
+            "mean_power_w": 4.740052451232247
+          }
+        }
+      },
+      "experiment_feasible_fraction": 0.5006654964217512,
+      "reject_reasons": {
+        "no_sunlit_limb": 0.41719874230821163,
+        "sun_in_found_fov": 0.08213576127003723,
+        "no_legal_roll": 0.0
+      },
+      "conops_baseline": {
+        "experiments_per_day": 1173.6440269284926,
+        "images_per_day": 2347.2880538569852,
+        "downlinked_mb_per_day": 1.4074728496749676,
+        "final_queue_mb": 0.3847832259252447,
+        "backlog_growth_mb_per_day": 0.12823272637464994,
+        "min_soc": 0.7,
+        "mean_soc": 0.7550368278013918,
+        "battery_limited": true,
+        "mean_generation_w": 7.518606317502986,
+        "mean_load_w": 7.7934806273027135,
+        "energy_margin_w": -0.27487430979972866,
+        "slews_per_day": 79.66512991647537,
+        "slew_time_fraction": 0.11444609478983815,
+        "max_tracking_rate_dps": 0.9234385756288627,
+        "mean_tracking_rate_dps": 0.005277185547878317,
+        "frac_safe": 0.0,
+        "frac_standby": 0.8173646341698656,
+        "frac_slew": 0.11444609478983817,
+        "frac_experiment": 0.06791921452132482,
+        "frac_downlink": 0.00027005651897147047
+      },
+      "thermal": {
+        "+x": {
+          "area_m2": 0.03,
+          "sunlit_fraction": 0.006654964217511237,
+          "mean_cosine": 0.001451088019792909,
+          "mean_solar_flux_w_m2": 1.974930794938149,
+          "mean_albedo_flux_w_m2": 82.78206000080127,
+          "mean_ir_flux_w_m2": 77.84939553956252,
+          "mean_total_flux_w_m2": 162.60638633530195,
+          "peak_solar_flux_w_m2": 865.3622015103267,
+          "mean_solar_power_w": 0.059247923848144465,
+          "longest_dark_min": 1481.4166666666667
+        },
+        "-x": {
+          "area_m2": 0.03,
+          "sunlit_fraction": 0.605698192550298,
+          "mean_cosine": 0.5573995395784763,
+          "mean_solar_flux_w_m2": 758.6207733663063,
+          "mean_albedo_flux_w_m2": 8.560319869188701,
+          "mean_ir_flux_w_m2": 86.15983894757827,
+          "mean_total_flux_w_m2": 853.3409321830733,
+          "peak_solar_flux_w_m2": 1361.0000280658414,
+          "mean_solar_power_w": 22.758623200989188,
+          "longest_dark_min": 36.0
+        },
+        "+y": {
+          "area_m2": 0.03,
+          "sunlit_fraction": 0.21631527169614784,
+          "mean_cosine": 0.05209829783917856,
+          "mean_solar_flux_w_m2": 70.90578335912203,
+          "mean_albedo_flux_w_m2": 37.92088016018698,
+          "mean_ir_flux_w_m2": 77.75719375469544,
+          "mean_total_flux_w_m2": 186.58385727400446,
+          "peak_solar_flux_w_m2": 1360.9975124940186,
+          "mean_solar_power_w": 2.1271735007736607,
+          "longest_dark_min": 41.166666666666664
+        },
+        "-y": {
+          "area_m2": 0.03,
+          "sunlit_fraction": 0.39599930556895124,
+          "mean_cosine": 0.021221133802049298,
+          "mean_solar_flux_w_m2": 28.881963104589094,
+          "mean_albedo_flux_w_m2": 45.99783827074544,
+          "mean_ir_flux_w_m2": 87.67891858457887,
+          "mean_total_flux_w_m2": 162.55871995991342,
+          "peak_solar_flux_w_m2": 1356.2791053841968,
+          "mean_solar_power_w": 0.8664588931376728,
+          "longest_dark_min": 42.25
+        },
+        "+z": {
+          "area_m2": 0.010000000000000002,
+          "sunlit_fraction": 0.21596805617175593,
+          "mean_cosine": 0.05050184824846418,
+          "mean_solar_flux_w_m2": 68.73301546615974,
+          "mean_albedo_flux_w_m2": 24.16912358682211,
+          "mean_ir_flux_w_m2": 60.8172427948493,
+          "mean_total_flux_w_m2": 153.71938184783116,
+          "peak_solar_flux_w_m2": 1042.557543140621,
+          "mean_solar_power_w": 0.6873301546615975,
+          "longest_dark_min": 38.25
+        },
+        "-z": {
+          "area_m2": 0.010000000000000002,
+          "sunlit_fraction": 0.3963079415906329,
+          "mean_cosine": 0.008508816896020116,
+          "mean_solar_flux_w_m2": 11.58049979548338,
+          "mean_albedo_flux_w_m2": 55.8288197706166,
+          "mean_ir_flux_w_m2": 81.40428685797205,
+          "mean_total_flux_w_m2": 148.81360642407202,
+          "peak_solar_flux_w_m2": 900.9694628559731,
+          "mean_solar_power_w": 0.11580499795483383,
+          "longest_dark_min": 43.333333333333336
+        }
+      },
+      "eclipse": {
+        "eclipse_fraction": 0.3891514438378889,
+        "max_eclipse_min": 36.083333333333336,
+        "mean_eclipse_min": 35.76950354609929,
+        "eclipses_counted": 47
+      },
+      "payload_rate_sweep": [
+        {
+          "experiments_per_day": 129.69749811924922,
+          "images_per_day": 259.39499623849844,
+          "downlinked_mb_per_day": 1.2524758395864275,
+          "final_queue_mb": 0.3311405859253145,
+          "backlog_growth_mb_per_day": 0.11035219129240241,
+          "min_soc": 0.7,
+          "mean_soc": 0.7560798922164034,
+          "battery_limited": true,
+          "mean_generation_w": 7.549621567881755,
+          "mean_load_w": 7.787946783433961,
+          "energy_margin_w": -0.23832521555220648,
+          "slews_per_day": 77.66516849597808,
+          "slew_time_fraction": 0.10657587623695529,
+          "max_tracking_rate_dps": 0.9234385756288627,
+          "mean_tracking_rate_dps": 0.0057421321317781505,
+          "frac_safe": 0.0,
+          "frac_standby": 0.8181169344727146,
+          "frac_slew": 0.1065758762369553,
+          "frac_experiment": 0.07505642252271368,
+          "frac_downlink": 0.0002507667676163654,
+          "requested_rate_hz": 0.02
+        },
+        {
+          "experiments_per_day": 324.9103991049555,
+          "images_per_day": 649.820798209911,
+          "downlinked_mb_per_day": 1.2499758878108058,
+          "final_queue_mb": 0.4356242259253655,
+          "backlog_growth_mb_per_day": 0.14517939947127398,
+          "min_soc": 0.7,
+          "mean_soc": 0.7561287796623493,
+          "battery_limited": true,
+          "mean_generation_w": 7.563814556332919,
+          "mean_load_w": 7.809744356783241,
+          "energy_margin_w": -0.2459298004503221,
+          "slews_per_day": 80.3317837233078,
+          "slew_time_fraction": 0.1112054165621805,
+          "max_tracking_rate_dps": 0.9234385756288627,
+          "mean_tracking_rate_dps": 0.00566749232820667,
+          "frac_safe": 0.0,
+          "frac_standby": 0.8133523658880037,
+          "frac_slew": 0.11120541656218051,
+          "frac_experiment": 0.07521074053355452,
+          "frac_downlink": 0.00023147701626126038,
+          "requested_rate_hz": 0.05
+        },
+        {
+          "experiments_per_day": 634.1544337493489,
+          "images_per_day": 1268.3088674986977,
+          "downlinked_mb_per_day": 1.354140545128373,
+          "final_queue_mb": 0.2767596259252997,
+          "backlog_growth_mb_per_day": 0.09222555429079643,
+          "min_soc": 0.7,
+          "mean_soc": 0.7557428201152722,
+          "battery_limited": true,
+          "mean_generation_w": 7.541897720481619,
+          "mean_load_w": 7.793197145116799,
+          "energy_margin_w": -0.25129942463518207,
+          "slews_per_day": 77.66516849597808,
+          "slew_time_fraction": 0.10927644142666999,
+          "max_tracking_rate_dps": 0.9234385756288627,
+          "mean_tracking_rate_dps": 0.00562611012669871,
+          "frac_safe": 0.0,
+          "frac_standby": 0.817075287899539,
+          "frac_slew": 0.10927644142667,
+          "frac_experiment": 0.07339750390617465,
+          "frac_downlink": 0.0002507667676163654,
+          "requested_rate_hz": 0.1
+        },
+        {
+          "experiments_per_day": 1173.6440269284926,
+          "images_per_day": 2347.2880538569852,
+          "downlinked_mb_per_day": 1.4074728496749676,
+          "final_queue_mb": 0.3847832259252447,
+          "backlog_growth_mb_per_day": 0.12823272637464994,
+          "min_soc": 0.7,
+          "mean_soc": 0.7550368278013918,
+          "battery_limited": true,
+          "mean_generation_w": 7.518606317502986,
+          "mean_load_w": 7.7934806273027135,
+          "energy_margin_w": -0.27487430979972866,
+          "slews_per_day": 79.66512991647537,
+          "slew_time_fraction": 0.11444609478983815,
+          "max_tracking_rate_dps": 0.9234385756288627,
+          "mean_tracking_rate_dps": 0.005277185547878317,
+          "frac_safe": 0.0,
+          "frac_standby": 0.8173646341698656,
+          "frac_slew": 0.11444609478983817,
+          "frac_experiment": 0.06791921452132482,
+          "frac_downlink": 0.00027005651897147047,
+          "requested_rate_hz": 0.2
+        },
+        {
+          "experiments_per_day": 3234.1042803958253,
+          "images_per_day": 6468.208560791651,
+          "downlinked_mb_per_day": 1.7707991743986418,
+          "final_queue_mb": 0.3184396259252308,
+          "backlog_growth_mb_per_day": 0.10611861962516131,
+          "min_soc": 0.7,
+          "mean_soc": 0.753695339858156,
+          "battery_limited": true,
+          "mean_generation_w": 7.504953578420474,
+          "mean_load_w": 7.835035381261935,
+          "energy_margin_w": -0.33008180284146255,
+          "slews_per_day": 80.99843753014022,
+          "slew_time_fraction": 0.11672228544974055,
+          "max_tracking_rate_dps": 0.9234385756288627,
+          "mean_tracking_rate_dps": 0.005842317591679613,
+          "frac_safe": 0.0,
+          "frac_standby": 0.80808626376806,
+          "frac_slew": 0.11672228544974056,
+          "frac_experiment": 0.07486352500916263,
+          "frac_downlink": 0.00032792577303678553,
+          "requested_rate_hz": 0.5
+        },
+        {
+          "experiments_per_day": 5651.557647421924,
+          "images_per_day": 11303.115294843848,
+          "downlinked_mb_per_day": 2.1366254508979377,
+          "final_queue_mb": 0.42195362592524777,
+          "backlog_growth_mb_per_day": 0.14062262070539305,
+          "min_soc": 0.7,
+          "mean_soc": 0.7543466113277955,
+          "battery_limited": true,
+          "mean_generation_w": 7.475722452096552,
+          "mean_load_w": 7.806233081923574,
+          "energy_margin_w": -0.3305106298270219,
+          "slews_per_day": 79.66512991647537,
+          "slew_time_fraction": 0.11917208387183888,
+          "max_tracking_rate_dps": 0.9343105544594477,
+          "mean_tracking_rate_dps": 0.005220099433471925,
+          "frac_safe": 0.0,
+          "frac_standby": 0.8150112845045427,
+          "frac_slew": 0.11917208387183889,
+          "frac_experiment": 0.06541154684516116,
+          "frac_downlink": 0.0004050847784572057,
+          "requested_rate_hz": 1.0
+        }
+      ]
+    },
+    "B_3panel_90": {
+      "description": "3-panel deployable on +y, rotated 90 deg so cells face -x",
+      "peak_total_w": 22.0,
+      "panels": [
+        "deployable"
+      ],
+      "standby_best_cosine_sum_w": 22.0,
+      "power_standby": {
+        "peak_capability_w": 22.0,
+        "orbit_average_w": 12.247327473845795,
+        "sunlit_average_w": 20.039841571587367,
+        "peak_achieved_w": 20.050800413477273,
+        "capacity_factor": 0.556696703356627,
+        "mean_incidence_deg": 1.8943738794993599,
+        "energy_wh_per_day": 293.9358593722991,
+        "per_panel": {
+          "deployable": {
+            "peak_w": 22.0,
+            "mean_cosine_sunlit": 0.999453466773763,
+            "mean_incidence_deg": 1.8943738794993599,
+            "fraction_of_time_illuminated": 1.0,
+            "mean_power_w": 13.437927884403988
+          }
+        }
+      },
+      "power_experiment": {
+        "peak_capability_w": 22.0,
+        "orbit_average_w": 6.421746195214023,
+        "sunlit_average_w": 10.512828638838231,
+        "peak_achieved_w": 19.83208629754317,
+        "capacity_factor": 0.29189755432791015,
+        "mean_incidence_deg": 58.378216772398126,
+        "energy_wh_per_day": 154.12190868513656,
+        "per_panel": {
+          "deployable": {
+            "peak_w": 22.0,
+            "mean_cosine_sunlit": 0.5243096853411449,
+            "mean_incidence_deg": 47.10483946669216,
+            "fraction_of_time_illuminated": 0.770297154766792,
+            "mean_power_w": 7.0460239139938805
+          }
+        }
+      },
+      "experiment_feasible_fraction": 0.5006654964217512,
+      "reject_reasons": {
+        "no_sunlit_limb": 0.41719874230821163,
+        "sun_in_found_fov": 0.08213576127003723,
+        "no_legal_roll": 0.0
+      },
+      "conops_baseline": {
+        "experiments_per_day": 4157.5864663104485,
+        "images_per_day": 8315.172932620897,
+        "downlinked_mb_per_day": 1.9282961362628033,
+        "final_queue_mb": 0.3047344259249502,
+        "backlog_growth_mb_per_day": 0.10155030774836787,
+        "min_soc": 0.7,
+        "mean_soc": 0.8006348230293648,
+        "battery_limited": true,
+        "mean_generation_w": 9.297389699779385,
+        "mean_load_w": 9.285702845238326,
+        "energy_margin_w": 0.011686854541061319,
+        "slews_per_day": 216.9958141239559,
+        "slew_time_fraction": 0.2743388437723037,
+        "max_tracking_rate_dps": 0.9234385756288627,
+        "mean_tracking_rate_dps": 0.016776748975936687,
+        "frac_safe": 0.0,
+        "frac_standby": 0.48469358229972415,
+        "frac_slew": 0.2743388437723038,
+        "frac_experiment": 0.24060106865222508,
+        "frac_downlink": 0.00036650527574699565
+      },
+      "thermal": {
+        "+x": {
+          "area_m2": 0.03,
+          "sunlit_fraction": 0.009124052390964681,
+          "mean_cosine": 0.0023147459845395614,
+          "mean_solar_flux_w_m2": 3.1503692849583427,
+          "mean_albedo_flux_w_m2": 59.61579450510216,
+          "mean_ir_flux_w_m2": 63.492895181721586,
+          "mean_total_flux_w_m2": 126.25905897178208,
+          "peak_solar_flux_w_m2": 1030.4055906616577,
+          "mean_solar_power_w": 0.09451107854875028,
+          "longest_dark_min": 1346.4166666666667
+        },
+        "-x": {
+          "area_m2": 0.03,
+          "sunlit_fraction": 0.6032291043768446,
+          "mean_cosine": 0.46369170805052107,
+          "mean_solar_flux_w_m2": 631.0844146567591,
+          "mean_albedo_flux_w_m2": 18.35761689778545,
+          "mean_ir_flux_w_m2": 91.90625724971187,
+          "mean_total_flux_w_m2": 741.3482888042564,
+          "peak_solar_flux_w_m2": 1361.0000280658414,
+          "mean_solar_power_w": 18.932532439702772,
+          "longest_dark_min": 38.666666666666664
+        },
+        "+y": {
+          "area_m2": 0.03,
+          "sunlit_fraction": 0.40107251017534384,
+          "mean_cosine": 0.15804525994720275,
+          "mean_solar_flux_w_m2": 215.09959878814297,
+          "mean_albedo_flux_w_m2": 28.042910474064236,
+          "mean_ir_flux_w_m2": 65.57686928142512,
+          "mean_total_flux_w_m2": 308.71937854363233,
+          "peak_solar_flux_w_m2": 1359.7175642108527,
+          "mean_solar_power_w": 6.452987963644289,
+          "longest_dark_min": 41.5
+        },
+        "-y": {
+          "area_m2": 0.03,
+          "sunlit_fraction": 0.21128064659246543,
+          "mean_cosine": 0.04917589625164991,
+          "mean_solar_flux_w_m2": 66.92839479849553,
+          "mean_albedo_flux_w_m2": 53.220307931751556,
+          "mean_ir_flux_w_m2": 94.1499336871297,
+          "mean_total_flux_w_m2": 214.2986364173768,
+          "peak_solar_flux_w_m2": 1332.0484004021635,
+          "mean_solar_power_w": 2.007851843954866,
+          "longest_dark_min": 42.25
+        },
+        "+z": {
+          "area_m2": 0.010000000000000002,
+          "sunlit_fraction": 0.38195636658243476,
+          "mean_cosine": 0.16189517550863478,
+          "mean_solar_flux_w_m2": 220.33933386725192,
+          "mean_albedo_flux_w_m2": 5.54284356289855,
+          "mean_ir_flux_w_m2": 44.19925476413805,
+          "mean_total_flux_w_m2": 270.08143219428854,
+          "peak_solar_flux_w_m2": 1042.557543140621,
+          "mean_solar_power_w": 2.2033933386725195,
+          "longest_dark_min": 38.25
+        },
+        "-z": {
+          "area_m2": 0.010000000000000002,
+          "sunlit_fraction": 0.2303967901853745,
+          "mean_cosine": 0.028712831047357334,
+          "mean_solar_flux_w_m2": 39.07816305545333,
+          "mean_albedo_flux_w_m2": 89.32212040257131,
+          "mean_ir_flux_w_m2": 111.36432517322869,
+          "mean_total_flux_w_m2": 239.76460863125337,
+          "peak_solar_flux_w_m2": 1218.9190766801453,
+          "mean_solar_power_w": 0.3907816305545334,
+          "longest_dark_min": 43.333333333333336
+        }
+      },
+      "eclipse": {
+        "eclipse_fraction": 0.3891514438378889,
+        "max_eclipse_min": 36.083333333333336,
+        "mean_eclipse_min": 35.76950354609929,
+        "eclipses_counted": 47
+      },
+      "payload_rate_sweep": [
+        {
+          "experiments_per_day": 421.9251943442448,
+          "images_per_day": 843.8503886884896,
+          "downlinked_mb_per_day": 1.3033081923574004,
+          "final_queue_mb": 0.3238221059253541,
+          "backlog_growth_mb_per_day": 0.10791274501630212,
+          "min_soc": 0.7,
+          "mean_soc": 0.8091633580712007,
+          "battery_limited": true,
+          "mean_generation_w": 9.319448839933543,
+          "mean_load_w": 9.267318940606856,
+          "energy_margin_w": 0.05212989932668737,
+          "slews_per_day": 215.32917960687485,
+          "slew_time_fraction": 0.26733666403040063,
+          "max_tracking_rate_dps": 0.9234385756288627,
+          "mean_tracking_rate_dps": 0.016948182004467748,
+          "frac_safe": 0.0,
+          "frac_standby": 0.4882428965490635,
+          "frac_slew": 0.26733666403040063,
+          "frac_experiment": 0.2441696726529195,
+          "frac_downlink": 0.0002507667676163654,
+          "requested_rate_hz": 0.02
+        },
+        {
+          "experiments_per_day": 1069.97935996605,
+          "images_per_day": 2139.9587199321,
+          "downlinked_mb_per_day": 1.354140545128373,
+          "final_queue_mb": 0.49328162592559016,
+          "backlog_growth_mb_per_day": 0.16439816207237895,
+          "min_soc": 0.7,
+          "mean_soc": 0.8024338976159177,
+          "battery_limited": true,
+          "mean_generation_w": 9.295402005423666,
+          "mean_load_w": 9.275125734457283,
+          "energy_margin_w": 0.020276270966382796,
+          "slews_per_day": 214.6625258000424,
+          "slew_time_fraction": 0.2657163249165718,
+          "max_tracking_rate_dps": 0.9234385756288627,
+          "mean_tracking_rate_dps": 0.01720679379861327,
+          "frac_safe": 0.0,
+          "frac_standby": 0.4863525009162632,
+          "frac_slew": 0.2657163249165718,
+          "frac_experiment": 0.2476804073995486,
+          "frac_downlink": 0.0002507667676163654,
+          "requested_rate_hz": 0.05
+        },
+        {
+          "experiments_per_day": 2098.459520456781,
+          "images_per_day": 4196.919040913562,
+          "downlinked_mb_per_day": 1.5116375069925347,
+          "final_queue_mb": 0.5317404259252699,
+          "backlog_growth_mb_per_day": 0.17721751478537576,
+          "min_soc": 0.7,
+          "mean_soc": 0.8081509920706148,
+          "battery_limited": true,
+          "mean_generation_w": 9.30403121650858,
+          "mean_load_w": 9.286901278910515,
+          "energy_margin_w": 0.017129937598065345,
+          "slews_per_day": 216.32916031712347,
+          "slew_time_fraction": 0.2726799251557647,
+          "max_tracking_rate_dps": 0.9234385756288627,
+          "mean_tracking_rate_dps": 0.016905491527873986,
+          "frac_safe": 0.0,
+          "frac_standby": 0.4841534692617812,
+          "frac_slew": 0.2726799251557647,
+          "frac_experiment": 0.24287725931212747,
+          "frac_downlink": 0.0002893462703265755,
+          "requested_rate_hz": 0.1
+        },
+        {
+          "experiments_per_day": 4157.5864663104485,
+          "images_per_day": 8315.172932620897,
+          "downlinked_mb_per_day": 1.9282961362628033,
+          "final_queue_mb": 0.3047344259249502,
+          "backlog_growth_mb_per_day": 0.10155030774836787,
+          "min_soc": 0.7,
+          "mean_soc": 0.8006348230293648,
+          "battery_limited": true,
+          "mean_generation_w": 9.297389699779385,
+          "mean_load_w": 9.285702845238326,
+          "energy_margin_w": 0.011686854541061319,
+          "slews_per_day": 216.9958141239559,
+          "slew_time_fraction": 0.2743388437723037,
+          "max_tracking_rate_dps": 0.9234385756288627,
+          "mean_tracking_rate_dps": 0.016776748975936687,
+          "frac_safe": 0.0,
+          "frac_standby": 0.48469358229972415,
+          "frac_slew": 0.2743388437723038,
+          "frac_experiment": 0.24060106865222508,
+          "frac_downlink": 0.00036650527574699565,
+          "requested_rate_hz": 0.2
+        },
+        {
+          "experiments_per_day": 10179.803630331204,
+          "images_per_day": 20359.607260662407,
+          "downlinked_mb_per_day": 2.8657780521209077,
+          "final_queue_mb": 0.48412962592527936,
+          "backlog_growth_mb_per_day": 0.16134755425221015,
+          "min_soc": 0.7,
+          "mean_soc": 0.779872341941941,
+          "battery_limited": true,
+          "mean_generation_w": 9.261172568914692,
+          "mean_load_w": 9.303727729017574,
+          "energy_margin_w": -0.04255516010288169,
+          "slews_per_day": 214.9958527034586,
+          "slew_time_fraction": 0.28240195983873767,
+          "max_tracking_rate_dps": 0.972952304921211,
+          "mean_tracking_rate_dps": 0.016358074343078854,
+          "frac_safe": 0.0,
+          "frac_standby": 0.4814143245693563,
+          "frac_slew": 0.28240195983873767,
+          "frac_experiment": 0.23564360255396308,
+          "frac_downlink": 0.0005401130379429409,
+          "requested_rate_hz": 0.5
+        },
+        {
+          "experiments_per_day": 19162.963677398195,
+          "images_per_day": 38325.92735479639,
+          "downlinked_mb_per_day": 4.374915607337821,
+          "final_queue_mb": 0.4195496259256696,
+          "backlog_growth_mb_per_day": 0.13982130282972105,
+          "min_soc": 0.7,
+          "mean_soc": 0.7808250702094687,
+          "battery_limited": true,
+          "mean_generation_w": 9.205432783345648,
+          "mean_load_w": 9.252249401053222,
+          "energy_margin_w": -0.04681661770757327,
+          "slews_per_day": 208.99596844196674,
+          "slew_time_fraction": 0.28352076541733373,
+          "max_tracking_rate_dps": 0.9749134556862473,
+          "mean_tracking_rate_dps": 0.015751233558007068,
+          "frac_safe": 0.0,
+          "frac_standby": 0.49387550394475416,
+          "frac_slew": 0.2835207654173338,
+          "frac_experiment": 0.22179356108099765,
+          "frac_downlink": 0.0008101695569144114,
+          "requested_rate_hz": 1.0
+        }
+      ]
+    },
+    "C_2panel_135_plus_body": {
+      "description": "2-panel deployable on +y at a 135 deg dihedral to the +y face, plus one body-mounted panel on the +y face. Per-panel power is taken as 14.8/2 = 7.4 W, consistent with the 7.5 W quoted for the body panel.",
+      "peak_total_w": 22.3,
+      "panels": [
+        "deployable",
+        "body_plus_y"
+      ],
+      "standby_best_cosine_sum_w": 14.800000000000004,
+      "power_standby": {
+        "peak_capability_w": 22.3,
+        "orbit_average_w": 8.239111209305955,
+        "sunlit_average_w": 13.481347965731722,
+        "peak_achieved_w": 13.488720000000033,
+        "capacity_factor": 0.36946687037246434,
+        "mean_incidence_deg": 60.0180775288772,
+        "energy_wh_per_day": 197.73866902334294,
+        "per_panel": {
+          "deployable": {
+            "peak_w": 14.8,
+            "mean_cosine_sunlit": 0.9994534667286239,
+            "mean_incidence_deg": 1.8943739577362764,
+            "fraction_of_time_illuminated": 1.0,
+            "mean_power_w": 9.040060576372566
+          },
+          "body_plus_y": {
+            "peak_w": 7.5,
+            "mean_cosine_sunlit": 0.0,
+            "mean_incidence_deg": 90.0,
+            "fraction_of_time_illuminated": 0.0,
+            "mean_power_w": 0.0
+          }
+        }
+      },
+      "power_experiment": {
+        "peak_capability_w": 22.3,
+        "orbit_average_w": 6.166640612119502,
+        "sunlit_average_w": 10.09514652936097,
+        "peak_achieved_w": 13.374144977129458,
+        "capacity_factor": 0.27653096915334086,
+        "mean_incidence_deg": 67.93927792383391,
+        "energy_wh_per_day": 147.99937469086805,
+        "per_panel": {
+          "deployable": {
+            "peak_w": 14.8,
+            "mean_cosine_sunlit": 0.7455741941676975,
+            "mean_incidence_deg": 24.171134358614836,
+            "fraction_of_time_illuminated": 0.8172229766002463,
+            "mean_power_w": 6.7404072162821995
+          },
+          "body_plus_y": {
+            "peak_w": 7.5,
+            "mean_cosine_sunlit": 0.005603830737658728,
+            "mean_incidence_deg": 88.01065099613798,
+            "fraction_of_time_illuminated": 0.161429879685477,
+            "mean_power_w": 0.025711515470601496
+          }
+        }
+      },
+      "experiment_feasible_fraction": 0.5006654964217512,
+      "reject_reasons": {
+        "no_sunlit_limb": 0.41719874230821163,
+        "sun_in_found_fov": 0.08213576127003723,
+        "no_legal_roll": 0.0
+      },
+      "conops_baseline": {
+        "experiments_per_day": 1660.6346328195827,
+        "images_per_day": 3321.2692656391655,
+        "downlinked_mb_per_day": 1.4608051542215619,
+        "final_queue_mb": 0.4667248259251778,
+        "backlog_growth_mb_per_day": 0.15554606616359776,
+        "min_soc": 0.7,
+        "mean_soc": 0.7581928935831872,
+        "battery_limited": true,
+        "mean_generation_w": 7.8659412471976005,
+        "mean_load_w": 8.108734885515325,
+        "energy_margin_w": -0.24279363831772452,
+        "slews_per_day": 122.66430045716709,
+        "slew_time_fraction": 0.1560540884627997,
+        "max_tracking_rate_dps": 0.9960692814796861,
+        "mean_tracking_rate_dps": 0.004518505043677867,
+        "frac_safe": 0.0,
+        "frac_standby": 0.7475550240157405,
+        "frac_slew": 0.15605408846279972,
+        "frac_experiment": 0.09610154125113328,
+        "frac_downlink": 0.0002893462703265755
+      },
+      "thermal": {
+        "+x": {
+          "area_m2": 0.03,
+          "sunlit_fraction": 0.02268474759360352,
+          "mean_cosine": 0.005685791772247965,
+          "mean_solar_flux_w_m2": 7.738362602029483,
+          "mean_albedo_flux_w_m2": 70.28214756054058,
+          "mean_ir_flux_w_m2": 77.721787247916,
+          "mean_total_flux_w_m2": 155.74229741048606,
+          "peak_solar_flux_w_m2": 1218.4353714249335,
+          "mean_solar_power_w": 0.23215087806088447,
+          "longest_dark_min": 366.9166666666667
+        },
+        "-x": {
+          "area_m2": 0.03,
+          "sunlit_fraction": 0.5896684091742057,
+          "mean_cosine": 0.3905018079925112,
+          "mean_solar_flux_w_m2": 531.4729606778078,
+          "mean_albedo_flux_w_m2": 13.517177098608986,
+          "mean_ir_flux_w_m2": 77.65758030440476,
+          "mean_total_flux_w_m2": 622.6477180808215,
+          "peak_solar_flux_w_m2": 1216.579497336606,
+          "mean_solar_power_w": 15.944188820334233,
+          "longest_dark_min": 41.416666666666664
+        },
+        "+y": {
+          "area_m2": 0.03,
+          "sunlit_fraction": 0.010281437472270982,
+          "mean_cosine": 0.0080109805653233,
+          "mean_solar_flux_w_m2": 10.90294454940501,
+          "mean_albedo_flux_w_m2": 75.90180577853991,
+          "mean_ir_flux_w_m2": 78.71846590226072,
+          "mean_total_flux_w_m2": 165.5232162302056,
+          "peak_solar_flux_w_m2": 1354.6545910164555,
+          "mean_solar_power_w": 0.3270883364821503,
+          "longest_dark_min": 826.25
+        },
+        "-y": {
+          "area_m2": 0.03,
+          "sunlit_fraction": 0.6020717192955383,
+          "mean_cosine": 0.43570396139789613,
+          "mean_solar_flux_w_m2": 592.9930914625367,
+          "mean_albedo_flux_w_m2": 11.423386584895862,
+          "mean_ir_flux_w_m2": 75.68119424422724,
+          "mean_total_flux_w_m2": 680.0976722916597,
+          "peak_solar_flux_w_m2": 1354.144300020243,
+          "mean_solar_power_w": 17.7897927438761,
+          "longest_dark_min": 39.583333333333336
+        },
+        "+z": {
+          "area_m2": 0.010000000000000002,
+          "sunlit_fraction": 0.17428290349337397,
+          "mean_cosine": 0.027424055548035856,
+          "mean_solar_flux_w_m2": 37.32413960087679,
+          "mean_albedo_flux_w_m2": 27.75074226887905,
+          "mean_ir_flux_w_m2": 68.71726222045932,
+          "mean_total_flux_w_m2": 133.79214409021517,
+          "peak_solar_flux_w_m2": 781.9190269008401,
+          "mean_solar_power_w": 0.373241396008768,
+          "longest_dark_min": 56.333333333333336
+        },
+        "-z": {
+          "area_m2": 0.010000000000000002,
+          "sunlit_fraction": 0.43743369147971684,
+          "mean_cosine": 0.013802340127786382,
+          "mean_solar_flux_w_m2": 18.784984913917263,
+          "mean_albedo_flux_w_m2": 53.89723011154377,
+          "mean_ir_flux_w_m2": 86.94810175971891,
+          "mean_total_flux_w_m2": 159.63031678517993,
+          "peak_solar_flux_w_m2": 553.7050042481526,
+          "mean_solar_power_w": 0.18784984913917266,
+          "longest_dark_min": 42.25
+        }
+      },
+      "eclipse": {
+        "eclipse_fraction": 0.3891514438378889,
+        "max_eclipse_min": 36.083333333333336,
+        "mean_eclipse_min": 35.76950354609929,
+        "eclipses_counted": 47
+      },
+      "payload_rate_sweep": [
+        {
+          "experiments_per_day": 172.49667251789123,
+          "images_per_day": 344.99334503578245,
+          "downlinked_mb_per_day": 1.2524758395864275,
+          "final_queue_mb": 0.35240362592534186,
+          "backlog_growth_mb_per_day": 0.11743973457282665,
+          "min_soc": 0.7,
+          "mean_soc": 0.7565384617267781,
+          "battery_limited": true,
+          "mean_generation_w": 7.891756801205019,
+          "mean_load_w": 8.109364657317567,
+          "energy_margin_w": -0.2176078561125497,
+          "slews_per_day": 120.33101213325358,
+          "slew_time_fraction": 0.15279412048378696,
+          "max_tracking_rate_dps": 0.969333674605392,
+          "mean_tracking_rate_dps": 0.004744245058096612,
+          "frac_safe": 0.0,
+          "frac_standby": 0.7471306494859281,
+          "frac_slew": 0.15279412048378696,
+          "frac_experiment": 0.09982446326266854,
+          "frac_downlink": 0.0002507667676163654,
+          "requested_rate_hz": 0.02
+        },
+        {
+          "experiments_per_day": 421.15854246638753,
+          "images_per_day": 842.3170849327751,
+          "downlinked_mb_per_day": 1.2499758878108058,
+          "final_queue_mb": 0.4834412259253756,
+          "backlog_growth_mb_per_day": 0.1611180920119305,
+          "min_soc": 0.7,
+          "mean_soc": 0.7580953566834233,
+          "battery_limited": true,
+          "mean_generation_w": 7.830932911245223,
+          "mean_load_w": 8.102677363476785,
+          "energy_margin_w": -0.2717444522315627,
+          "slews_per_day": 127.3308771049941,
+          "slew_time_fraction": 0.15360429004070136,
+          "max_tracking_rate_dps": 0.9960692814796861,
+          "mean_tracking_rate_dps": 0.004497359285082931,
+          "frac_safe": 0.0,
+          "frac_standby": 0.7486738295943365,
+          "frac_slew": 0.15360429004070136,
+          "frac_experiment": 0.09749040334870084,
+          "frac_downlink": 0.00023147701626126038,
+          "requested_rate_hz": 0.05
+        },
+        {
+          "experiments_per_day": 849.4836133562237,
+          "images_per_day": 1698.9672267124474,
+          "downlinked_mb_per_day": 1.3566404969039947,
+          "final_queue_mb": 0.3762372259252685,
+          "backlog_growth_mb_per_day": 0.1253841146580629,
+          "min_soc": 0.7,
+          "mean_soc": 0.7569781464133136,
+          "battery_limited": true,
+          "mean_generation_w": 7.894840005785978,
+          "mean_load_w": 8.131056985783454,
+          "energy_margin_w": -0.23621697999747535,
+          "slews_per_day": 124.66426187766437,
+          "slew_time_fraction": 0.15885110240928993,
+          "max_tracking_rate_dps": 0.969333674605392,
+          "mean_tracking_rate_dps": 0.004504263157583501,
+          "frac_safe": 0.0,
+          "frac_standby": 0.7425589784147683,
+          "frac_slew": 0.15885110240928996,
+          "frac_experiment": 0.09831986265697035,
+          "frac_downlink": 0.00027005651897147047,
+          "requested_rate_hz": 0.1
+        },
+        {
+          "experiments_per_day": 1660.6346328195827,
+          "images_per_day": 3321.2692656391655,
+          "downlinked_mb_per_day": 1.4608051542215619,
+          "final_queue_mb": 0.4667248259251778,
+          "backlog_growth_mb_per_day": 0.15554606616359776,
+          "min_soc": 0.7,
+          "mean_soc": 0.7581928935831872,
+          "battery_limited": true,
+          "mean_generation_w": 7.8659412471976005,
+          "mean_load_w": 8.108734885515325,
+          "energy_margin_w": -0.24279363831772452,
+          "slews_per_day": 122.66430045716709,
+          "slew_time_fraction": 0.1560540884627997,
+          "max_tracking_rate_dps": 0.9960692814796861,
+          "mean_tracking_rate_dps": 0.004518505043677867,
+          "frac_safe": 0.0,
+          "frac_standby": 0.7475550240157405,
+          "frac_slew": 0.15605408846279972,
+          "frac_experiment": 0.09610154125113328,
+          "frac_downlink": 0.0002893462703265755,
+          "requested_rate_hz": 0.2
+        },
+        {
+          "experiments_per_day": 3939.92399837966,
+          "images_per_day": 7879.84799675932,
+          "downlinked_mb_per_day": 1.824131478945236,
+          "final_queue_mb": 0.5090976259253138,
+          "backlog_growth_mb_per_day": 0.16967006037671767,
+          "min_soc": 0.7,
+          "mean_soc": 0.7579808614549013,
+          "battery_limited": true,
+          "mean_generation_w": 7.861715077736179,
+          "mean_load_w": 8.068753712312649,
+          "energy_margin_w": -0.20703863457647,
+          "slews_per_day": 116.33108929225901,
+          "slew_time_fraction": 0.1518489226673868,
+          "max_tracking_rate_dps": 0.8926146637941423,
+          "mean_tracking_rate_dps": 0.004249269687485654,
+          "frac_safe": 0.0,
+          "frac_standby": 0.7566019174012847,
+          "frac_slew": 0.1518489226673868,
+          "frac_experiment": 0.09120194440693659,
+          "frac_downlink": 0.0003472155243918906,
+          "requested_rate_hz": 0.5
+        },
+        {
+          "experiments_per_day": 8099.843753014023,
+          "images_per_day": 16199.687506028045,
+          "downlinked_mb_per_day": 2.5532840801682064,
+          "final_queue_mb": 0.38828562592528704,
+          "backlog_growth_mb_per_day": 0.129400170521189,
+          "min_soc": 0.7,
+          "mean_soc": 0.7560780503415524,
+          "battery_limited": true,
+          "mean_generation_w": 7.863455139808284,
+          "mean_load_w": 8.122414174109295,
+          "energy_margin_w": -0.25895903430101097,
+          "slews_per_day": 123.99760807083194,
+          "slew_time_fraction": 0.1606643390366698,
+          "max_tracking_rate_dps": 0.8910534768621704,
+          "mean_tracking_rate_dps": 0.004393563004421624,
+          "frac_safe": 0.0,
+          "frac_standby": 0.7451052255936421,
+          "frac_slew": 0.16066433903666982,
+          "frac_experiment": 0.09374819158581046,
+          "frac_downlink": 0.0004822437838776258,
+          "requested_rate_hz": 1.0
+        }
+      ]
+    }
+  },
+  "data_budget": {
+    "downlink_capacity_bytes_per_day": 1031975926.3903086,
+    "max_experiments_per_day_downlink_limited": 6216918.827713165,
+    "budget_at_17280_experiments": {
+      "experiments_per_day": 17280.0,
+      "stored_bytes_per_day": 22651349760.0,
+      "downlink_bytes_per_day": 5316427.721008468,
+      "image_bytes_per_day": 1310848.0,
+      "numerical_bytes_per_day": 2384640.0,
+      "telemetry_bytes_per_day": 733780.4341737234,
+      "storage_required_gb": 22.65134976
+    },
+    "budget_at_downlink_limit": {
+      "experiments_per_day": 6216918.827713165,
+      "stored_bytes_per_day": 8149398309957.182,
+      "downlink_bytes_per_day": 1032227273.5903087,
+      "image_bytes_per_day": 1310848.0,
+      "numerical_bytes_per_day": 857934798.2244169,
+      "telemetry_bytes_per_day": 733780.4341737234,
+      "storage_required_gb": 8149.3983099571815
+    }
+  },
+  "binding_constraints": {
+    "A_2panel_90": {
+      "experiment_time_fraction": 0.06791921452132482,
+      "experiment_seconds_per_day": 5868.2201346424645,
+      "ceiling_usb2": 161175.47977228448,
+      "ceiling_storage": 48828.125,
+      "ceiling_downlink": 12433837.65542633,
+      "achieved_at_0p2hz": 2347.2880538569852,
+      "energy_margin_w": -0.27487430979972866,
+      "battery_limited": true,
+      "binding_constraint": "on-board storage",
+      "binding_value_images_per_day": 48828.125,
+      "required_rate_hz": 4.16038627383352
+    },
+    "B_3panel_90": {
+      "experiment_time_fraction": 0.24060106865222508,
+      "experiment_seconds_per_day": 20787.93233155225,
+      "ceiling_usb2": 570957.6140868232,
+      "ceiling_storage": 48828.125,
+      "ceiling_downlink": 12433837.65542633,
+      "achieved_at_0p2hz": 8315.172932620897,
+      "energy_margin_w": 0.011686854541061319,
+      "battery_limited": true,
+      "binding_constraint": "on-board storage",
+      "binding_value_images_per_day": 48828.125,
+      "required_rate_hz": 1.1744343838826121
+    },
+    "C_2panel_135_plus_body": {
+      "experiment_time_fraction": 0.09610154125113328,
+      "experiment_seconds_per_day": 8303.173164097916,
+      "ceiling_usb2": 228053.46214868544,
+      "ceiling_storage": 48828.125,
+      "ceiling_downlink": 12433837.65542633,
+      "achieved_at_0p2hz": 3321.2692656391655,
+      "energy_margin_w": -0.24279363831772452,
+      "battery_limited": true,
+      "binding_constraint": "on-board storage",
+      "binding_value_images_per_day": 48828.125,
+      "required_rate_hz": 2.940329199150506
+    }
+  },
+  "power_modes": {
+    "mode_loads_w": {
+      "safe": 5.942200000000001,
+      "detumble": 7.097200000000001,
+      "standby": 6.9652,
+      "slew": 11.5852,
+      "experiment": 11.321200000000001,
+      "downlink": 20.605200000000004
+    },
+    "subsystem_breakdown": {
+      "safe": {
+        "CDH": 0.8250000000000001,
+        "COMM": 1.87,
+        "ADCS": 0.24200000000000002,
+        "POWER": 1.4080000000000001,
+        "THR": 1.5972
+      },
+      "detumble": {
+        "CDH": 0.8250000000000001,
+        "ADCS": 3.2670000000000003,
+        "POWER": 1.4080000000000001,
+        "THR": 1.5972
+      },
+      "standby": {
+        "CDH": 1.2375,
+        "COMM": 1.87,
+        "ADCS": 0.5445000000000001,
+        "POWER": 1.4080000000000001,
+        "PAY": 0.30800000000000005,
+        "THR": 1.5972
+      },
+      "slew": {
+        "CDH": 1.6500000000000001,
+        "COMM": 1.87,
+        "ADCS": 3.2670000000000003,
+        "POWER": 1.4080000000000001,
+        "PAY": 1.7930000000000001,
+        "THR": 1.5972
+      },
+      "experiment": {
+        "CDH": 1.6500000000000001,
+        "COMM": 1.87,
+        "ADCS": 0.8470000000000002,
+        "POWER": 1.4080000000000001,
+        "PAY": 3.9490000000000003,
+        "THR": 1.5972
+      },
+      "downlink": {
+        "CDH": 1.6500000000000001,
+        "COMM": 13.310000000000002,
+        "ADCS": 0.8470000000000002,
+        "POWER": 1.4080000000000001,
+        "PAY": 1.7930000000000001,
+        "THR": 1.5972
+      }
+    },
+    "heater_sensitivity": {
+      "duty_0pct": {
+        "safe": 4.345000000000001,
+        "detumble": 5.500000000000001,
+        "standby": 5.368,
+        "slew": 9.988000000000001,
+        "experiment": 9.724000000000002,
+        "downlink": 19.008000000000003
+      },
+      "duty_15pct": {
+        "safe": 5.143600000000001,
+        "detumble": 6.2986,
+        "standby": 6.166600000000001,
+        "slew": 10.786600000000002,
+        "experiment": 10.522600000000002,
+        "downlink": 19.806600000000003
+      },
+      "duty_30pct": {
+        "safe": 5.942200000000001,
+        "detumble": 7.097200000000001,
+        "standby": 6.9652,
+        "slew": 11.5852,
+        "experiment": 11.321200000000001,
+        "downlink": 20.605200000000004
+      },
+      "duty_50pct": {
+        "safe": 7.007000000000001,
+        "detumble": 8.162,
+        "standby": 8.030000000000001,
+        "slew": 12.650000000000002,
+        "experiment": 12.386000000000003,
+        "downlink": 21.67
+      }
+    }
+  },
+  "raan_sweep": [
+    {
+      "raan_deg": 0.0,
+      "beta_deg": 2.029141700293598,
+      "eclipse_fraction": 0.390081592500434,
+      "max_eclipse_min": 36.083333333333336,
+      "orbit_average_w": 8.227250871443433
+    },
+    {
+      "raan_deg": 45.0,
+      "beta_deg": 31.925115482007982,
+      "eclipse_fraction": 0.3747468317805683,
+      "max_eclipse_min": 34.416666666666664,
+      "orbit_average_w": 8.433187729637478
+    },
+    {
+      "raan_deg": 90.0,
+      "beta_deg": 51.571975861035696,
+      "eclipse_fraction": 0.3245761240668943,
+      "max_eclipse_min": 29.25,
+      "orbit_average_w": 9.108833627818132
+    },
+    {
+      "raan_deg": 135.0,
+      "beta_deg": 35.42727614440606,
+      "eclipse_fraction": 0.36745558706093395,
+      "max_eclipse_min": 33.916666666666664,
+      "orbit_average_w": 8.532180042670316
+    },
+    {
+      "raan_deg": 180.0,
+      "beta_deg": 2.120720804529826,
+      "eclipse_fraction": 0.3884034488744864,
+      "max_eclipse_min": 36.083333333333336,
+      "orbit_average_w": 8.25012571386797
+    },
+    {
+      "raan_deg": 225.0,
+      "beta_deg": 31.839366607208603,
+      "eclipse_fraction": 0.36195822001041605,
+      "max_eclipse_min": 34.416666666666664,
+      "orbit_average_w": 8.605847500539824
+    },
+    {
+      "raan_deg": 270.0,
+      "beta_deg": 51.45264251093462,
+      "eclipse_fraction": 0.3049013367281986,
+      "max_eclipse_min": 29.416666666666668,
+      "orbit_average_w": 9.375906505757984
+    },
+    {
+      "raan_deg": 315.0,
+      "beta_deg": 35.333405540622934,
+      "eclipse_fraction": 0.3580232625426769,
+      "max_eclipse_min": 33.916666666666664,
+      "orbit_average_w": 8.664157832278896
+    }
+  ]
+}
