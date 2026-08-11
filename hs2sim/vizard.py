@@ -180,16 +180,30 @@ def _add_ground_stations(cfg: MissionConfig, viz, vizSupport) -> None:
     """Drop every Leaf Space site into the scene with its elevation cone."""
     for station in cfg.stations():
         elevation = float(station.minimum_elevation_deg)
+        lat = math.radians(float(station.latitude_deg))
+        lon = math.radians(float(station.longitude_deg))
+
+        # The boresight must be the station's own local vertical, not the
+        # planet's spin axis -- otherwise every cone points at the north pole
+        # and the visibility volumes fan off in the same direction instead of
+        # radiating out of their own sites.
+        #
+        # It has to be passed explicitly: vizSupport's fallback divides the
+        # list returned by lla2fixedframe by a float, which raises TypeError.
+        # Basilisk models Earth with radiusRatio = 1, so the local vertical is
+        # exactly the normalised position vector.
+        g_hat = [math.cos(lat) * math.cos(lon),
+                 math.cos(lat) * math.sin(lon),
+                 math.sin(lat)]
+
         vizSupport.addLocation(
             viz,
             stationName=str(station.name),
             parentBodyName="earth",
-            # Vizard wants the boresight and the half-cone it sweeps. A station
-            # with a 10 deg mask sees everything within 80 deg of local zenith.
-            lla_GP=[math.radians(float(station.latitude_deg)),
-                    math.radians(float(station.longitude_deg)),
-                    float(station.altitude_m)],
-            gHat_P=[0.0, 0.0, 1.0],
+            lla_GP=[lat, lon, float(station.altitude_m)],
+            gHat_P=g_hat,
+            # A station with a 10 deg mask sees everything within 80 deg of its
+            # local zenith, i.e. a 160 deg edge-to-edge cone.
             fieldOfView=math.radians(2.0 * (90.0 - elevation)),
             color=COLOR_STATION,
             range=4000_000.0,

@@ -92,8 +92,8 @@ def check(frames: list) -> tuple[list[tuple[str, bool, str]], dict]:
                          for f in frames if f.spacecraft])
     sun = np.array([np.array(cb.position) for f in frames
                     for cb in f.celestialBodies if cb.bodyName == "sun"])
-    stations = [(loc.stationName, np.array(loc.r_GP_P), loc.fieldOfView)
-                for loc in first.locations]
+    stations = [(loc.stationName, np.array(loc.r_GP_P), loc.fieldOfView,
+                 np.array(loc.gHat_P)) for loc in first.locations]
     cones = [(c.coneName, c.toBodyName, c.isKeepIn, c.incidenceAngle,
               np.array(c.normalVector)) for c in first.settings.keepOutInCones]
 
@@ -103,7 +103,14 @@ def check(frames: list) -> tuple[list[tuple[str, bool, str]], dict]:
     inclination = np.degrees(np.arccos(np.clip(h[:, 2], -1, 1)))
     sun_dist = np.linalg.norm(sun, axis=1)
     sun_dec = np.degrees(np.arcsin(sun[:, 2] / sun_dist))
-    station_radii = np.array([np.linalg.norm(r) for _, r, _ in stations])
+    station_radii = np.array([np.linalg.norm(r) for _, r, _, _ in stations])
+    # Each station's boresight must be its own local vertical. Getting this
+    # wrong (e.g. using the planet spin axis for every site) leaves the markers
+    # in the right place but sends every visibility cone the same way.
+    boresight_error = np.array([
+        math.degrees(math.acos(float(np.clip(
+            np.dot(g / np.linalg.norm(g), r / np.linalg.norm(r)), -1, 1))))
+        for _, r, _, g in stations])
 
     results = [
         ("Earth present and at the origin",
@@ -133,6 +140,9 @@ def check(frames: list) -> tuple[list[tuple[str, bool, str]], dict]:
         ("Ground stations on Earth's surface",
          station_radii.size > 0 and np.all(np.abs(station_radii - R_EARTH) < 5e3),
          f"{station_radii.min()/1e3:.1f} - {station_radii.max()/1e3:.1f} km"),
+        ("Station boresights point at local zenith",
+         boresight_error.size > 0 and boresight_error.max() < 1.0,
+         f"max deviation {boresight_error.max():.2f} deg from local vertical"),
         ("Constraint cones attached",
          len(cones) == 4,
          f"{len(cones)} cones"),
@@ -241,7 +251,7 @@ def render(data: dict, out_path: pathlib.Path, frame: int | None = None) -> None
         math.cos(math.radians(view_elev)) * math.sin(math.radians(view_azim)),
         math.sin(math.radians(view_elev))])
     shown = 0
-    for name, r, _ in data["stations"]:
+    for name, r, _, _ in data["stations"]:
         p = r / 1e3
         if np.dot(p / np.linalg.norm(p), cam) <= 0.10:
             continue

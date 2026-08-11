@@ -127,7 +127,9 @@ slewing between that attitude, sun-pointing, and ground-station tracking,
 because with magnetorquers alone a 90° slew takes about six minutes.
 
 The yellow markers on Earth are the Leaf Space sites, each drawn with the cone
-its 10° elevation mask sweeps. Watch Reykjavík: at 64°N it never comes into
+its 10° elevation mask sweeps — a 160° edge-to-edge cone about that site's own
+local vertical, so the cones radiate outward from the globe rather than fanning
+off in a common direction. Watch Reykjavík: at 64°N it never comes into
 view, because a 51.6° inclination ground track cannot reach it.
 
 ## 6. Live streaming instead of a file
