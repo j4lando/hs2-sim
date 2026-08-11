@@ -146,6 +146,77 @@ def write_report(cfg: MissionConfig, results: dict, path: pathlib.Path) -> None:
     add(f"Eclipse: {_fmt(eclipse['eclipse_fraction'] * 100, '.1f')} % of the "
         f"orbit, longest {_fmt(eclipse['max_eclipse_min'], '.1f')} min.\n")
 
+    # -- single node thermal -------------------------------------------------
+    if "single_node_thermal" in first:
+        add("## Single-node temperature\n")
+        add("Whole spacecraft treated as one isothermal node "
+            "(instantaneous internal conduction):\n")
+        add("```")
+        add("C dT/dt = Q_solar + Q_albedo + Q_earthIR + Q_internal "
+            "- P_electrical - eps*sigma*A*T^4")
+        add("```")
+        add("")
+        if "dissipation" in results:
+            d = results["dissipation"]
+            add("**Where the electrical power goes.** Everything drawn becomes "
+                "heat except what physically leaves the vehicle:\n")
+            add("| Subsystem | Leaves as | Non-heat power | Heat fraction |")
+            add("| --- | --- | --- | --- |")
+            add(f"| COMM (radio TX) | RF wave | "
+                f"{_fmt(d['rf_radiated_w'], '.2f')} W | "
+                f"**{_fmt(d['radio_tx_heat_fraction'] * 100, '.1f')} %** |")
+            add(f"| COMM (radio RX) | nothing | 0 W | 100.0 % |")
+            add(f"| ADCS (magnetorquers) | mechanical work | "
+                f"{_fmt(d['mtq_mechanical_w'] * 1e9, '.3f')} nW | "
+                f"**{_fmt(d['mtq_heat_fraction'] * 100, '.4f')} %** |")
+            add(f"| Everything else | nothing | 0 W | 100.0 % |")
+            add("")
+            add("The transmitter is the only meaningful exception. Of its "
+                f"{_fmt(d['radio_tx_input_w'], '.2f')} W input, the link "
+                "budget's own numbers (2 W at the PA, -3 dB return loss, "
+                f"-1 dB circuit loss) leave only {_fmt(d['rf_radiated_w'], '.2f')} W "
+                "actually radiating away -- so the radio is, thermally, almost "
+                "a pure heater.\n")
+            add("Magnetorquers are resistive coils. The mechanical power they "
+                "deliver is torque x body rate, which at this vehicle's "
+                f"{_fmt(d['mean_torque_unm'], '.1f')} uN m and "
+                f"{_fmt(d['mean_rate_dps'], '.4f')} deg/s is about "
+                f"{_fmt(d['mtq_mechanical_w'] * 1e9, '.3f')} nW -- roughly one "
+                "part in a billion of their electrical draw. Unlike reaction "
+                "wheels they store no useful kinetic energy, and the coil's "
+                "field energy returns to the bus on de-energisation. Treating "
+                "ADCS as 100 % dissipative is correct to nine decimal places.\n")
+
+        add("| Geometry | Mean | Min | Max | Swing | Time constant | "
+            "Battery margin (cold/hot) |")
+        add("| --- | --- | --- | --- | --- | --- | --- |")
+        for name, entry in results["geometries"].items():
+            t = entry["single_node_thermal"]
+            add(f"| {name} | {_fmt(t['mean_c'], '.1f')} C | "
+                f"{_fmt(t['min_c'], '.1f')} C | {_fmt(t['max_c'], '.1f')} C | "
+                f"{_fmt(t['swing_c'], '.1f')} C | "
+                f"{_fmt(t['time_constant_min'], '.0f')} min | "
+                f"{_fmt(t['battery_margin_cold_c'], '+.1f')} / "
+                f"{_fmt(t['battery_margin_hot_c'], '+.1f')} C |")
+        add("")
+        node = first["single_node_thermal"]
+        add(f"Radiating area {_fmt(node['radiating_area_m2'], '.3f')} m^2 at an "
+            f"effective emissivity of {_fmt(node['effective_emissivity'], '.2f')}; "
+            f"thermal capacitance {_fmt(node['thermal_capacitance_j_k'], '.0f')} J/K. "
+            f"Mean absorbed environmental load "
+            f"{_fmt(node['mean_absorbed_env_w'], '.1f')} W against "
+            f"{_fmt(node['mean_internal_heat_w'], '.1f')} W of internal "
+            f"dissipation.\n")
+        add("The thermal time constant is comparable to the orbit period, which "
+            "is why the swing is far smaller than the instantaneous radiative "
+            "equilibrium would suggest: the vehicle's own mass averages the "
+            "eclipse cycle. A single-node model cannot see gradients, so the "
+            "deployed wing will in reality run hotter in sunlight and colder in "
+            "eclipse than these numbers, and the battery -- usually the most "
+            "temperature-sensitive item -- sits inside the bus where swings are "
+            "smaller. Treat this as the bulk average, not a component "
+            "prediction.\n")
+
     # -- ADCS ---------------------------------------------------------------
     adcs_res = results["adcs"]
     add("## ADCS: magnetorquer limits\n")
@@ -214,17 +285,19 @@ def write_report(cfg: MissionConfig, results: dict, path: pathlib.Path) -> None:
                 f"**{_fmt(row['binding_value_images_per_day'], ',.0f')}** | "
                 f"{_fmt(row['required_rate_hz'], '.2f')} Hz |")
         add("")
+        cadences = ", ".join(
+            f"{name} needs {_fmt(row['required_rate_hz'], '.1f')} Hz"
+            for name, row in results["binding_constraints"].items())
         add("Two things follow. First, downlink capacity is **not** the "
             "constraint on science volume, and it is not close: only two debug "
             "images come down per day, so what is actually transmitted is "
-            "numerical data plus housekeeping, three orders of magnitude below "
-            "what the Leaf Space contacts can carry. Sizing the radio against "
-            "image volume would be sizing against the wrong thing. Second, "
-            "on-board storage is what binds, and energy plus attitude "
-            "feasibility decide how hard the cameras must be driven to reach "
-            "it -- geometry B needs 1.2 Hz, geometry A needs 4.2 Hz to hit the "
-            "same storage ceiling because it has far less time in experiment "
-            "mode.\n")
+            "numerical data plus housekeeping, orders of magnitude below what "
+            "the Leaf Space contacts can carry. Sizing the radio against image "
+            "volume would be sizing against the wrong thing. Second, energy and "
+            "attitude feasibility decide how hard the cameras have to be driven "
+            "to reach whichever ceiling binds: " + cadences + ". A geometry "
+            "with less time in experiment mode has to run its cameras faster "
+            "to collect the same science.\n")
 
     add("### Achieved cadence from the CONOPS scheduler\n")
     add("| Geometry | Requested (Hz) | Experiments/day | Images/day | "
@@ -261,17 +334,5 @@ def write_report(cfg: MissionConfig, results: dict, path: pathlib.Path) -> None:
         "up to 0.1 deg/s about the stiff axis takes on the order of a minute, "
         "so tracking is not the binding constraint -- the discrete slews "
         "between modes are.\n")
-
-    if "raan_sweep" in results:
-        add("## Beta angle sweep\n")
-        add("| RAAN (deg) | Beta (deg) | Eclipse | Max eclipse (min) | "
-            "Orbit-avg power (W) |")
-        add("| --- | --- | --- | --- | --- |")
-        for row in results["raan_sweep"]:
-            add(f"| {_fmt(row['raan_deg'], '.0f')} | {_fmt(row['beta_deg'], '.1f')} | "
-                f"{_fmt(row['eclipse_fraction'] * 100, '.1f')} % | "
-                f"{_fmt(row['max_eclipse_min'], '.1f')} | "
-                f"{_fmt(row['orbit_average_w'], '.2f')} |")
-        add("")
 
     path.write_text("\n".join(lines), encoding="utf-8")

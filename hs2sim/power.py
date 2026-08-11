@@ -33,6 +33,8 @@ class ArrayGeometry:
     normals: np.ndarray      # (K,3) body frame unit normals
     peak_w: np.ndarray       # (K,) watts at normal incidence
     panel_names: list[str]
+    deployable: np.ndarray   # (K,) True for wing panels, False for body-mounted
+    count: np.ndarray        # (K,) number of physical panels in each group
 
     @property
     def peak_total_w(self) -> float:
@@ -43,17 +45,23 @@ def load_array_geometry(name: str, option: AttrDict) -> ArrayGeometry:
     normals = []
     peaks = []
     names = []
+    deployable = []
+    counts = []
     for panel in option.panels:
         n = np.asarray(panel.normal, dtype=float)
         normals.append(n / np.linalg.norm(n))
         peaks.append(float(panel.peak_w))
         names.append(str(panel.name))
+        deployable.append(bool(panel.get("deployable", False)))
+        counts.append(int(panel.get("count", 1)))
     return ArrayGeometry(
         name=name,
         description=str(option.get("description", "")).strip(),
         normals=np.asarray(normals),
         peak_w=np.asarray(peaks),
         panel_names=names,
+        deployable=np.asarray(deployable, dtype=bool),
+        count=np.asarray(counts, dtype=int),
     )
 
 

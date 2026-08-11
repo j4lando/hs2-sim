@@ -1,16 +1,18 @@
 # HS-2 CubeSat operations simulation
 
 A [Basilisk](https://avslab.github.io/basilisk/)-backed operations model of a
-3U CubeSat in an ISS orbit, built to answer six questions:
+3U CubeSat in an ISS orbit, built to answer the operational questions below:
 
 | Question | Where it is answered |
 | --- | --- |
 | Thermal: average sunlight exposure per surface | `hs2sim/thermal.py` |
+| Thermal: single-node spacecraft temperature | `hs2sim/thermal.py` |
 | Power: sunlight on three candidate array geometries | `hs2sim/power.py` |
 | Payload: how many images are sustainable | `hs2sim/comms.py` + `hs2sim/conops.py` |
 | Comms: Leaf Space passes per day | `hs2sim/comms.py` |
 | ADCS: magnetorquer limits on operations | `hs2sim/adcs.py` |
 | CONOPS: how it fits together | `hs2sim/conops.py` |
+| Watching the CONOPS in 3D | `hs2sim/vizard.py`, [docs/VIZARD.md](docs/VIZARD.md) |
 
 ## Running it
 
@@ -19,8 +21,13 @@ pip install -r requirements.txt      # numpy, scipy, matplotlib, pyyaml, pytest
 # plus Basilisk, built from source per the AVS Lab instructions
 python run_analysis.py               # full run -> results/
 python run_analysis.py --quick       # 1 day, coarse search, for a fast check
+python run_analysis.py --vizard      # also export a Vizard recording
 pytest tests/                        # physics checks, no Basilisk needed
 ```
+
+See [docs/VIZARD.md](docs/VIZARD.md) for installing Vizard and opening the
+recording — including how to rebuild Basilisk with `vizInterface` if
+`vizSupport.vizFound` comes back `False`.
 
 Everything configurable lives in `config/`. No spacecraft number is hard-coded
 in the analysis code; if a value matters it is in a YAML file and can be swept.
@@ -28,8 +35,8 @@ in the analysis code; if a value matters it is in a YAML file and can be swept.
 ## How the model is put together
 
 **Basilisk owns the truth.** `hs2sim/environment.py` builds a Basilisk scenario
-with the spacecraft, an Earth spherical-harmonic gravity model (GGM03S to
-degree 4, so nodal regression and hence beta-angle drift are real), the
+with the spacecraft, an Earth zonal spherical-harmonic gravity model (GGM03S
+J2-J4, so nodal regression and hence beta-angle drift are real), the
 `eclipse` module, a centred-dipole magnetic field, and one `groundLocation`
 module per Leaf Space site. Every downstream module consumes those time
 histories and adds no dynamics of its own.
@@ -78,13 +85,17 @@ These are the numbers most likely to change your answers. All are in `config/`.
 
 | Assumption | Value | Why it matters |
 | --- | --- | --- |
-| Battery capacity | 77 Wh | Single biggest driver of sustainable image count. Not supplied in any budget. |
 | Ground station coordinates | approximate | `leaf.space` is blocked by this environment's network egress policy, so exact site coordinates could not be retrieved. See below. |
+| Surface optical properties | α/ε per surface | Drives the single-node temperature more than anything else. Handbook values; replace with coupon data. |
+| Specific heat | 850 J/kg/K | Sets the thermal time constant, and hence the size of the orbital temperature swing. |
 | MT01 dipole moment | 0.20 A m² | Not clearly published. CR0002 is confirmed at 0.20 A m². |
 | Heater duty cycle | swept | Explicitly untrusted. |
 | USB 2.0 bulk efficiency | 60 % of 480 Mb/s | Sets the payload frame-rate ceiling. |
 | Residual dipole | 0.005 A m² | Drives the disturbance torque the magnetorquers must fight. |
-| Geometry C interpretation | see below | The wording admits more than one reading. |
+| Deployable panel area | 0.03 m² each | Only used by the thermal model, for radiating area. |
+
+Battery capacity (75.6 Wh), payload storage (128 GB) and the geometry C
+deployment angle are all as specified, not assumed.
 
 ### Ground station coordinates
 
@@ -107,18 +118,42 @@ capacity and scheduling redundancy — so the model counts locations.
 
 ### Solar array geometry C
 
-"1 deployable solar panel attached to +y face with a 135 degree angle between
-deployables and +y face, two panels on the deployable and one panel on the +y
-face" is modelled as:
+The deployment angle is the dihedral between the wing and the +y face, anchored
+by two stated facts: at 180° the wing cells face the same way as the +y face,
+and at 90° they face −x (geometries A and B). Both are satisfied by rotating
+the normal about +z through (180° − θ):
 
-- one deployable wing carrying 2 panels, 14.8 W at normal incidence, at a
-  135 deg dihedral to the +y face, so its normal is `(-0.707, -0.707, 0)`;
-- one body-mounted panel on +y, 7.5 W, normal `(0, 1, 0)`.
+| θ | Wing normal |
+| --- | --- |
+| 180° | `( 0.000,  1.000, 0)` = +y |
+| 135° | `(-0.707,  0.707, 0)` |
+| 90° | `(-1.000,  0.000, 0)` = −x |
 
-The hinge is taken to be along the long (z) edge of the +y face, which is what
-makes the 90 deg case in geometries A and B put the wing normal at exactly
-`-x` as you described. If you meant two wings in a V, add the second panel to
-`config/spacecraft.yaml` — the analysis code needs no change.
+So geometry C is one wing carrying 2 panels (14.8 W) whose normal sits 45° off
+the +y body panel (7.5 W) — near enough that all three panels are illuminated
+at once, which is the whole point of the configuration.
+
+## Single-node thermal model
+
+The whole spacecraft is treated as one isothermal node (instantaneous internal
+conduction):
+
+```
+C dT/dt = Q_solar + Q_albedo + Q_earthIR + Q_internal - P_electrical - eps*sigma*A*T^4
+```
+
+Internal dissipation is derived, not assumed. Everything drawn becomes heat
+except energy that physically leaves the vehicle, which is only two things: the
+RF the transmitter radiates (computed from the link budget's own 2 W PA output,
+−3 dB return loss and −1 dB circuit loss) and the mechanical work the
+magnetorquers do (torque × body rate). The second turns out to be about a
+billionth of their electrical draw, so ADCS is thermally a pure resistor.
+
+The model reports mean, min, max and swing, plus margin against battery and
+electronics limits. Its honest limitation: a single node cannot see gradients,
+so the deployed wing really will run hotter in sunlight and colder in eclipse
+than the bulk number, and the battery — usually the most temperature-sensitive
+item — sits inside the bus where swings are smaller.
 
 ## Layout
 
@@ -129,12 +164,14 @@ hs2sim/
   environment.py Basilisk scenario; orbit, Sun, eclipse, B-field, access
   geometry.py    attitude constraint solving
   power.py       array output, mode loads, battery integration
-  thermal.py     per-face illumination, albedo and Earth IR view factors
+  thermal.py     per-face illumination, view factors, single-node temperature
   comms.py       passes, link budget, data budget
   adcs.py        magnetorquer authority, slew times, disturbances
   conops.py      the mode scheduler
   report.py      Markdown report generation
   plots.py       figures
+  vizard.py      CONOPS export for 3D playback
 run_analysis.py  entry point
+docs/VIZARD.md   how to install Vizard and view the CONOPS
 tests/           physics checks that run without Basilisk
 ```

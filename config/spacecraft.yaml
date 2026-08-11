@@ -54,11 +54,22 @@ antennas:
 # ---------------------------------------------------------------------------
 # Solar array geometry options under trade [given].
 #
-# The deployable wing hinges on the +y face along its long (z) edge, so the
-# wing normal rotates about +z starting from +y:
-#     n(theta) = Rz(theta) * y_hat = (-sin theta, cos theta, 0)
-#   theta =  90 deg -> n = -x   (the "points in -x" configurations)
-#   theta = 135 deg -> n = (-0.7071, -0.7071, 0)
+# The deployable wing hinges on the +y face along its long (z) edge. The
+# deployment angle theta is the dihedral between the wing and the +y face, and
+# the anchor points are [given]:
+#
+#   theta = 180 deg -> wing cells face the SAME direction as the +y face, n = +y
+#   theta =  90 deg -> wing cells face -x        (geometries A and B)
+#
+# Both are satisfied by rotating about +z through (180 - theta):
+#     n(theta) = Rz(180 - theta) * y_hat = (-sin(180-theta), cos(180-theta), 0)
+#   theta = 180 -> ( 0.0000,  1.0000, 0)  = +y
+#   theta = 135 -> (-0.7071,  0.7071, 0)
+#   theta =  90 -> (-1.0000,  0.0000, 0)  = -x
+#
+# At 135 deg the wing normal is only 45 deg off the +y body panel, so all three
+# panels can be illuminated simultaneously -- which is the point of the
+# configuration.
 #
 # peak_w is power at NORMAL incidence with no cosine loss [given].
 # ---------------------------------------------------------------------------
@@ -68,23 +79,24 @@ solar_array_options:
     description: "2-panel deployable on +y, rotated 90 deg so cells face -x"
     peak_total_w: 14.8         # [given]
     panels:
-      - {name: deployable, normal: [-1.0, 0.0, 0.0], peak_w: 14.8, deployable: true}
+      - {name: deployable, normal: [-1.0, 0.0, 0.0], peak_w: 14.8, deployable: true, count: 2}
 
   B_3panel_90:
     description: "3-panel deployable on +y, rotated 90 deg so cells face -x"
     peak_total_w: 22.0         # [given]
     panels:
-      - {name: deployable, normal: [-1.0, 0.0, 0.0], peak_w: 22.0, deployable: true}
+      - {name: deployable, normal: [-1.0, 0.0, 0.0], peak_w: 22.0, deployable: true, count: 3}
 
   C_2panel_135_plus_body:
     description: >
       2-panel deployable on +y at a 135 deg dihedral to the +y face, plus one
-      body-mounted panel on the +y face. Per-panel power is taken as
+      body-mounted panel on the +y face. The wing normal sits 45 deg off +y, so
+      all three panels see the Sun at once. Per-panel power is taken as
       14.8/2 = 7.4 W, consistent with the 7.5 W quoted for the body panel.
     peak_total_w: 22.3         # 14.8 (wing) + 7.5 (body panel)
     panels:
-      - {name: deployable, normal: [-0.70710678, -0.70710678, 0.0], peak_w: 14.8, deployable: true}
-      - {name: body_plus_y, normal: [0.0, 1.0, 0.0], peak_w: 7.5, deployable: false}
+      - {name: deployable, normal: [-0.70710678, 0.70710678, 0.0], peak_w: 14.8, deployable: true, count: 2}
+      - {name: body_plus_y, normal: [0.0, 1.0, 0.0], peak_w: 7.5, deployable: false, count: 1}
 
 solar_array:
   # Cell/MPPT behaviour applied on top of the cosine law.
@@ -94,9 +106,7 @@ solar_array:
   degradation: 0.98            # [assumed] 1-year LEO cell degradation
 
 battery:
-  # Not supplied in the budgets -- this is the single most important unknown
-  # for the "how many images" answer, so it is exposed here and swept.
-  capacity_wh: 77.0            # [assumed] typical 3U pack (e.g. 8 x 18650)
+  capacity_wh: 75.6            # [given]
   depth_of_discharge_limit: 0.30   # [assumed] keep SOC above 70 % for cycle life
   round_trip_efficiency: 0.95      # [assumed]
   initial_soc: 0.90
@@ -221,7 +231,46 @@ payload:
   numerical_bytes_per_experiment: 122
   # Debug images actually downlinked per day: 1 LOST + 1 FOUND [given].
   debug_images_per_day: 2
-  storage_gb: 32.0               # [assumed] eMMC available to payload
+  storage_gb: 128.0              # [given] payload storage
+
+# ---------------------------------------------------------------------------
+# Single-node (lumped) thermal model.
+#
+# The whole spacecraft is treated as one isothermal node: internal conduction
+# is assumed instantaneous, so there is one temperature. This is the classic
+# first-cut analysis and it is only as good as its Biot number -- a 3U with a
+# deployed wing is not truly isothermal, and the wing in particular will run
+# hotter in sunlight and colder in eclipse than the bus.
+# ---------------------------------------------------------------------------
+thermal:
+  # Specific heat of the assembly. Aluminium is 900 J/kg/K; a populated 3U with
+  # PCBs, battery and harness averages a little lower.
+  specific_heat_j_per_kg_k: 850.0     # [assumed]
+
+  # Optical properties. alpha = solar absorptivity, epsilon = IR emissivity.
+  # Body panels are anodised aluminium; cell-covered surfaces are much more
+  # absorptive. [assumed] -- these are the usual first-cut handbook values and
+  # they move the answer a lot, so they are the first thing to replace with
+  # real coupon data.
+  surfaces:
+    bus:        {alpha: 0.40, epsilon: 0.80}   # black anodised aluminium
+    solar_cell: {alpha: 0.92, epsilon: 0.85}   # triple-junction cell coverglass
+    panel_back: {alpha: 0.30, epsilon: 0.80}   # rear of the deployable wing
+
+  # Deployable wing area per panel. A 3U wing panel is roughly 10 x 30 cm.
+  # Both faces radiate; only the front carries cells.
+  panel_area_m2: 0.03                 # [assumed]
+
+  # Solar cell conversion efficiency. Absorbed sunlight that becomes
+  # electricity leaves the thermal node, so it must not also be counted as heat.
+  cell_efficiency: 0.30               # [assumed] triple-junction
+
+  # Survival/operational limits used only for reporting margin.
+  limits_c:
+    battery_min: -10.0                # [assumed] typical Li-ion charge limit
+    battery_max: 45.0
+    electronics_min: -40.0
+    electronics_max: 85.0
 
 # ---------------------------------------------------------------------------
 # CONOPS scheduling policy. These are operator choices, not hardware limits.

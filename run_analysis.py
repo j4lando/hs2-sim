@@ -58,8 +58,17 @@ def main() -> int:
                         help="override time step in seconds")
     parser.add_argument("--quick", action="store_true",
                         help="short run with a coarse attitude search")
-    parser.add_argument("--no-sweep", action="store_true",
-                        help="skip the RAAN / beta-angle sweep")
+    parser.add_argument("--vizard", metavar="GEOMETRY", nargs="?",
+                        const="__best__", default=None,
+                        help="export the CONOPS timeline for Vizard playback; "
+                             "optionally name a geometry, otherwise the one "
+                             "with the best energy margin is used")
+    parser.add_argument("--vizard-stride", type=int, default=4,
+                        help="write every Nth sample to the Vizard file "
+                             "(default 4, keeps the file manageable)")
+    parser.add_argument("--vizard-live", action="store_true",
+                        help="stream to a running Vizard instead of saving "
+                             "a file")
     args = parser.parse_args()
 
     cfg = MissionConfig()
@@ -149,10 +158,33 @@ def main() -> int:
         "usb2_max_experiments_per_day": usb_fps * 86400.0,
     }
 
+    # ------------------------------------- internal dissipation accounting
+    # How much of each subsystem's draw becomes heat. ADCS and COMM are the
+    # only two that export energy off the vehicle.
+    mean_rate_rad_s = 1.7e-3
+    heat_fractions_global = thermal.dissipation_fractions(
+        cfg, mean_torque_nm=authority.mean_max_torque_nm,
+        mean_body_rate_rad_s=mean_rate_rad_s)
+    margin = 1.0 + float(cfg.power.margin)
+    results["dissipation"] = {
+        "radio_tx_heat_fraction": heat_fractions_global["radio_tx"],
+        "radio_tx_input_w": float(cfg.power.components.radio_tx.peak_w) * margin,
+        "rf_radiated_w": heat_fractions_global["_rf_radiated_w"],
+        "mtq_heat_fraction": heat_fractions_global["mtq_cr0002"],
+        "mtq_mechanical_w": heat_fractions_global["_mtq_mechanical_w"],
+        "mean_torque_unm": authority.mean_max_torque_nm * 1e6,
+        "mean_rate_dps": math.degrees(mean_rate_rad_s),
+        "heat_by_mode_w": {
+            mode: thermal.mode_heat_w(cfg, mode, heat_fractions_global)
+            for mode in cfg.power.modes
+        },
+    }
+
     # ------------------------------------------- per array geometry analysis
     log("Running per-geometry power, thermal, pointing and CONOPS analysis...")
     geometries = power.all_array_geometries(cfg)
     per_geometry: dict[str, object] = {}
+    flown_attitudes: dict[str, np.ndarray] = {}
 
     for array in geometries:
         log(f"  geometry {array.name} ({array.peak_total_w:.1f} W peak)")
@@ -193,6 +225,35 @@ def main() -> int:
                                  authority, baseline_rate, passes)
         entry["conops_baseline"] = conops.summarise(cfg, env, result)
 
+        # Single-node thermal: internal dissipation follows the flown mode.
+        heat_fractions = thermal.dissipation_fractions(
+            cfg,
+            mean_torque_nm=authority.mean_max_torque_nm,
+            mean_body_rate_rad_s=float(np.mean(result.tracking_rate)) or 1.7e-3)
+        heat_by_mode = {code: thermal.mode_heat_w(cfg, mode_name, heat_fractions)
+                        for code, mode_name in conops.MODE_NAMES.items()
+                        if mode_name in cfg.power.modes}
+        internal_heat = np.array([heat_by_mode.get(int(m), 0.0)
+                                  for m in result.mode])
+        # Battery round-trip losses are dissipated on board too.
+        battery_loss = np.clip(result.generation_w - result.load_w, 0, None) * (
+            1.0 - float(cfg.spacecraft.battery.round_trip_efficiency))
+        node = thermal.single_node_temperature(
+            cfg, env, result.dcm_BN, array.normals, array.peak_w,
+            is_deployable=array.deployable, panel_count=array.count,
+            generation_w=result.generation_w,
+            internal_heat_w=internal_heat + battery_loss)
+        # Decimated series for plotting.
+        step = max(1, env.n_samples // 3000)
+        entry["temperature_series_c"] = (node.temperature_k[::step] - 273.15).tolist()
+        entry["temperature_series_t_h"] = (env.t_s[::step] / 3600.0).tolist()
+        entry["single_node_thermal"] = {
+            **node.stats,
+            "radiating_area_m2": node.radiating_area_m2,
+            "effective_emissivity": node.effective_emissivity,
+            "thermal_capacitance_j_k": node.thermal_capacitance_j_k,
+        }
+
         faces = thermal.analyse(cfg, env, result.dcm_BN)
         entry["thermal"] = {
             name: {
@@ -220,6 +281,8 @@ def main() -> int:
             s["requested_rate_hz"] = float(rate)
             sweep.append(s)
         entry["payload_rate_sweep"] = sweep
+        # Keep the flown attitude so it can be handed to Vizard afterwards.
+        flown_attitudes[array.name] = result.dcm_BN
         per_geometry[array.name] = entry
 
     results["geometries"] = per_geometry
@@ -291,31 +354,30 @@ def main() -> int:
         },
     }
 
-    # ------------------------------------------------------- RAAN sweep
-    if not args.no_sweep and not args.quick:
-        log("Sweeping RAAN to cover the beta-angle range...")
-        sweep_rows = []
-        best_array = max(geometries, key=lambda a: a.peak_total_w)
-        for raan in cfg.mission.analysis.raan_sweep_deg:
-            sub = cfg.copy_with(**{"mission.orbit.raan_deg": float(raan)})
-            sub.mission.simulation.duration_days = min(
-                1.0, float(cfg.sim.duration_days))
-            sub_env = environment.propagate(sub)
-            sub_standby, _ = geometry.sun_pointing_attitude(
-                sub_env, best_array.normals, best_array.peak_w)
-            gen = power.orbit_average_generation(sub, sub_env, best_array, sub_standby)
-            ecl = thermal.eclipse_statistics(sub_env)
-            sweep_rows.append({
-                "raan_deg": float(raan),
-                "beta_deg": float(np.degrees(np.mean(np.abs(sub_env.beta_angle())))),
-                "eclipse_fraction": ecl["eclipse_fraction"],
-                "max_eclipse_min": ecl["max_eclipse_min"],
-                "orbit_average_w": gen["orbit_average_w"],
-            })
-            log(f"  RAAN {raan:5.1f} deg -> beta {sweep_rows[-1]['beta_deg']:5.1f} deg, "
-                f"eclipse {ecl['eclipse_fraction']*100:4.1f} %, "
-                f"{gen['orbit_average_w']:.1f} W")
-        results["raan_sweep"] = sweep_rows
+    # ------------------------------------------------------------ Vizard
+    if args.vizard is not None:
+        from hs2sim import vizard
+        choice = args.vizard
+        if choice == "__best__":
+            choice = max(per_geometry,
+                         key=lambda n: per_geometry[n]["conops_baseline"][
+                             "energy_margin_w"])
+        if choice not in flown_attitudes:
+            log(f"Unknown geometry '{choice}'. Options: "
+                f"{', '.join(flown_attitudes)}")
+        else:
+            log(f"Exporting the {choice} CONOPS timeline for Vizard...")
+            saved = vizard.export(cfg, env, flown_attitudes[choice],
+                                  RESULTS_DIR, name=f"hs2_conops_{choice}",
+                                  stride=args.vizard_stride,
+                                  live_stream=args.vizard_live)
+            if args.vizard_live:
+                log("  live stream finished")
+            elif saved is None:
+                log("  Basilisk was built without vizInterface; nothing saved")
+            else:
+                log(f"  wrote {saved}")
+                results["vizard_file"] = str(saved)
 
     # ------------------------------------------------------------- write
     out_path = RESULTS_DIR / "summary.json"

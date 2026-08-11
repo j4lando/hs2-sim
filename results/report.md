@@ -68,7 +68,7 @@ Heater duty cycle sensitivity (the heater number is not trusted):
 | --- | --- | --- | --- | --- |
 | A_2panel_90 | 14.8 | 8.24 | 0.557 | 4.32 |
 | B_3panel_90 | 22.0 | 12.25 | 0.557 | 6.42 |
-| C_2panel_135_plus_body | 22.3 | 8.24 | 0.369 | 6.17 |
+| C_2panel_135_plus_body | 22.3 | 11.57 | 0.519 | 8.93 |
 
 ### Per-panel incidence (sun-pointing standby attitude)
 
@@ -76,8 +76,8 @@ Heater duty cycle sensitivity (the heater number is not trusted):
 | --- | --- | --- | --- | --- | --- |
 | A_2panel_90 | deployable | 14.8 | 1.9 deg | 100 % | 9.04 |
 | B_3panel_90 | deployable | 22.0 | 1.9 deg | 100 % | 13.44 |
-| C_2panel_135_plus_body | deployable | 14.8 | 1.9 deg | 100 % | 9.04 |
-| C_2panel_135_plus_body | body_plus_y | 7.5 | 90.0 deg | 0 % | 0.00 |
+| C_2panel_135_plus_body | deployable | 14.8 | 14.9 deg | 100 % | 8.74 |
+| C_2panel_135_plus_body | body_plus_y | 7.5 | 30.3 deg | 100 % | 3.96 |
 
 ### Experiment-mode pointing feasibility
 
@@ -93,14 +93,45 @@ Flown attitude from the CONOPS scheduler, geometry `A_2panel_90`.
 
 | Face | Area (m^2) | Sunlit | Mean solar (W/m^2) | Albedo | Earth IR | Total | Peak solar | Longest dark (min) |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| +x | 0.030 | 1 % | 2 | 83 | 78 | 163 | 865 | 1481.4 |
-| -x | 0.030 | 61 % | 759 | 9 | 86 | 853 | 1361 | 36.0 |
-| +y | 0.030 | 22 % | 71 | 38 | 78 | 187 | 1361 | 41.2 |
-| -y | 0.030 | 40 % | 29 | 46 | 88 | 163 | 1356 | 42.2 |
-| +z | 0.010 | 22 % | 69 | 24 | 61 | 154 | 1043 | 38.2 |
-| -z | 0.010 | 40 % | 12 | 56 | 81 | 149 | 901 | 43.3 |
+| +x | 0.030 | 1 % | 1 | 82 | 77 | 160 | 294 | 1571.9 |
+| -x | 0.030 | 61 % | 759 | 9 | 86 | 855 | 1361 | 36.0 |
+| +y | 0.030 | 23 % | 75 | 36 | 77 | 189 | 1352 | 41.2 |
+| -y | 0.030 | 38 % | 23 | 47 | 88 | 158 | 1332 | 43.2 |
+| +z | 0.010 | 22 % | 74 | 23 | 60 | 158 | 1043 | 38.2 |
+| -z | 0.010 | 39 % | 14 | 57 | 82 | 154 | 1158 | 43.3 |
 
 Eclipse: 38.9 % of the orbit, longest 36.1 min.
+
+## Single-node temperature
+
+Whole spacecraft treated as one isothermal node (instantaneous internal conduction):
+
+```
+C dT/dt = Q_solar + Q_albedo + Q_earthIR + Q_internal - P_electrical - eps*sigma*A*T^4
+```
+
+**Where the electrical power goes.** Everything drawn becomes heat except what physically leaves the vehicle:
+
+| Subsystem | Leaves as | Non-heat power | Heat fraction |
+| --- | --- | --- | --- |
+| COMM (radio TX) | RF wave | 0.80 W | **93.0 %** |
+| COMM (radio RX) | nothing | 0 W | 100.0 % |
+| ADCS (magnetorquers) | mechanical work | 15.163 nW | **100.0000 %** |
+| Everything else | nothing | 0 W | 100.0 % |
+
+The transmitter is the only meaningful exception. Of its 11.44 W input, the link budget's own numbers (2 W at the PA, -3 dB return loss, -1 dB circuit loss) leave only 0.80 W actually radiating away -- so the radio is, thermally, almost a pure heater.
+
+Magnetorquers are resistive coils. The mechanical power they deliver is torque x body rate, which at this vehicle's 8.9 uN m and 0.0974 deg/s is about 15.163 nW -- roughly one part in a billion of their electrical draw. Unlike reaction wheels they store no useful kinetic energy, and the coil's field energy returns to the bus on de-energisation. Treating ADCS as 100 % dissipative is correct to nine decimal places.
+
+| Geometry | Mean | Min | Max | Swing | Time constant | Battery margin (cold/hot) |
+| --- | --- | --- | --- | --- | --- | --- |
+| A_2panel_90 | 8.1 C | -5.9 C | 19.9 C | 25.8 C | 80 min | +4.1 / +25.1 C |
+| B_3panel_90 | 6.3 C | -8.9 C | 22.5 C | 31.4 C | 66 min | +1.1 / +22.5 C |
+| C_2panel_135_plus_body | 15.8 C | 0.8 C | 27.8 C | 27.0 C | 73 min | +10.8 / +17.2 C |
+
+Radiating area 0.260 m^2 at an effective emissivity of 0.81; thermal capacitance 5100 J/K. Mean absorbed environmental load 74.1 W against 8.0 W of internal dissipation.
+
+The thermal time constant is comparable to the orbit period, which is why the swing is far smaller than the instantaneous radiative equilibrium would suggest: the vehicle's own mass averages the eclipse cycle. A single-node model cannot see gradients, so the deployed wing will in reality run hotter in sunlight and colder in eclipse than these numbers, and the battery -- usually the most temperature-sensitive item -- sits inside the bus where swings are smaller. Treat this as the bulk average, not a component prediction.
 
 ## ADCS: magnetorquer limits
 
@@ -133,54 +164,41 @@ Time in experiment mode is a multiplier on cadence rather than a ceiling of its 
 
 | Geometry | Time in experiment mode | USB 2.0 | Storage | Downlink | Binding constraint | Max images/day | Cadence needed |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| A_2panel_90 | 6.8 % (1.6 h/day) | 161,175 | 48,828 | 12,433,838 | on-board storage | **48,828** | 4.16 Hz |
-| B_3panel_90 | 24.1 % (5.8 h/day) | 570,958 | 48,828 | 12,433,838 | on-board storage | **48,828** | 1.17 Hz |
-| C_2panel_135_plus_body | 9.6 % (2.3 h/day) | 228,053 | 48,828 | 12,433,838 | on-board storage | **48,828** | 2.94 Hz |
+| A_2panel_90 | 7.8 % (1.9 h/day) | 183,926 | 195,312 | 12,433,838 | USB 2.0 bus over the available experiment time | **183,926** | 13.73 Hz |
+| B_3panel_90 | 24.0 % (5.8 h/day) | 570,088 | 195,312 | 12,433,838 | on-board storage | **195,312** | 4.70 Hz |
+| C_2panel_135_plus_body | 29.4 % (7.1 h/day) | 698,305 | 195,312 | 12,433,838 | on-board storage | **195,312** | 3.84 Hz |
 
-Two things follow. First, downlink capacity is **not** the constraint on science volume, and it is not close: only two debug images come down per day, so what is actually transmitted is numerical data plus housekeeping, three orders of magnitude below what the Leaf Space contacts can carry. Sizing the radio against image volume would be sizing against the wrong thing. Second, on-board storage is what binds, and energy plus attitude feasibility decide how hard the cameras must be driven to reach it -- geometry B needs 1.2 Hz, geometry A needs 4.2 Hz to hit the same storage ceiling because it has far less time in experiment mode.
+Two things follow. First, downlink capacity is **not** the constraint on science volume, and it is not close: only two debug images come down per day, so what is actually transmitted is numerical data plus housekeeping, orders of magnitude below what the Leaf Space contacts can carry. Sizing the radio against image volume would be sizing against the wrong thing. Second, energy and attitude feasibility decide how hard the cameras have to be driven to reach whichever ceiling binds: A_2panel_90 needs 13.7 Hz, B_3panel_90 needs 4.7 Hz, C_2panel_135_plus_body needs 3.8 Hz. A geometry with less time in experiment mode has to run its cameras faster to collect the same science.
 
 ### Achieved cadence from the CONOPS scheduler
 
 | Geometry | Requested (Hz) | Experiments/day | Images/day | Min SOC | Downlink (MB/day) | Backlog growth (MB/day) |
 | --- | --- | --- | --- | --- | --- | --- |
-| A_2panel_90 | 0.02 | 130 | 259 | 70 % | 1.3 | +0.11 |
-| A_2panel_90 | 0.05 | 325 | 650 | 70 % | 1.2 | +0.15 |
-| A_2panel_90 | 0.10 | 634 | 1,268 | 70 % | 1.4 | +0.09 |
-| A_2panel_90 | 0.20 | 1,174 | 2,347 | 70 % | 1.4 | +0.13 |
-| A_2panel_90 | 0.50 | 3,234 | 6,468 | 70 % | 1.8 | +0.11 |
-| A_2panel_90 | 1.00 | 5,652 | 11,303 | 70 % | 2.1 | +0.14 |
+| A_2panel_90 | 0.02 | 139 | 277 | 70 % | 1.2 | +0.17 |
+| A_2panel_90 | 0.05 | 338 | 677 | 70 % | 1.2 | +0.15 |
+| A_2panel_90 | 0.10 | 677 | 1,354 | 70 % | 1.4 | +0.10 |
+| A_2panel_90 | 0.20 | 1,339 | 2,679 | 70 % | 1.5 | +0.10 |
+| A_2panel_90 | 0.50 | 3,196 | 6,392 | 70 % | 1.8 | +0.10 |
+| A_2panel_90 | 1.00 | 6,243 | 12,486 | 70 % | 2.2 | +0.13 |
 | B_3panel_90 | 0.02 | 422 | 844 | 70 % | 1.3 | +0.11 |
-| B_3panel_90 | 0.05 | 1,070 | 2,140 | 70 % | 1.4 | +0.16 |
-| B_3panel_90 | 0.10 | 2,098 | 4,197 | 70 % | 1.5 | +0.18 |
-| B_3panel_90 | 0.20 | 4,158 | 8,315 | 70 % | 1.9 | +0.10 |
-| B_3panel_90 | 0.50 | 10,180 | 20,360 | 70 % | 2.9 | +0.16 |
-| B_3panel_90 | 1.00 | 19,163 | 38,326 | 70 % | 4.4 | +0.14 |
-| C_2panel_135_plus_body | 0.02 | 172 | 345 | 70 % | 1.3 | +0.12 |
-| C_2panel_135_plus_body | 0.05 | 421 | 842 | 70 % | 1.2 | +0.16 |
-| C_2panel_135_plus_body | 0.10 | 849 | 1,699 | 70 % | 1.4 | +0.13 |
-| C_2panel_135_plus_body | 0.20 | 1,661 | 3,321 | 70 % | 1.5 | +0.16 |
-| C_2panel_135_plus_body | 0.50 | 3,940 | 7,880 | 70 % | 1.8 | +0.17 |
-| C_2panel_135_plus_body | 1.00 | 8,100 | 16,200 | 70 % | 2.6 | +0.13 |
+| B_3panel_90 | 0.05 | 1,071 | 2,141 | 70 % | 1.4 | +0.16 |
+| B_3panel_90 | 0.10 | 2,099 | 4,199 | 70 % | 1.5 | +0.18 |
+| B_3panel_90 | 0.20 | 4,151 | 8,303 | 70 % | 1.9 | +0.10 |
+| B_3panel_90 | 0.50 | 9,858 | 19,716 | 70 % | 2.8 | +0.16 |
+| B_3panel_90 | 1.00 | 18,641 | 37,283 | 70 % | 4.3 | +0.16 |
+| C_2panel_135_plus_body | 0.02 | 509 | 1,018 | 89 % | 1.2 | +0.18 |
+| C_2panel_135_plus_body | 0.05 | 1,256 | 2,513 | 89 % | 1.5 | +0.09 |
+| C_2panel_135_plus_body | 0.10 | 2,544 | 5,089 | 89 % | 1.7 | +0.10 |
+| C_2panel_135_plus_body | 0.20 | 5,085 | 10,170 | 89 % | 2.1 | +0.10 |
+| C_2panel_135_plus_body | 0.50 | 12,167 | 24,335 | 89 % | 3.2 | +0.12 |
+| C_2panel_135_plus_body | 1.00 | 22,838 | 45,676 | 89 % | 5.0 | +0.12 |
 
 ## CONOPS mode split (baseline 0.2 Hz)
 
 | Geometry | Standby | Experiment | Downlink | Slew | Slews/day | Energy margin (W) | Peak tracking rate |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| A_2panel_90 | 81.7 % | 6.8 % | 0.03 % | 11.4 % | 80 | -0.27 | 0.923 deg/s |
-| B_3panel_90 | 48.5 % | 24.1 % | 0.04 % | 27.4 % | 217 | 0.01 | 0.923 deg/s |
-| C_2panel_135_plus_body | 74.8 % | 9.6 % | 0.03 % | 15.6 % | 123 | -0.24 | 0.996 deg/s |
+| A_2panel_90 | 80.6 % | 7.8 % | 0.03 % | 11.7 % | 82 | -0.32 | 0.975 deg/s |
+| B_3panel_90 | 48.6 % | 24.0 % | 0.04 % | 27.4 % | 216 | 0.00 | 0.923 deg/s |
+| C_2panel_135_plus_body | 47.3 % | 29.4 % | 0.04 % | 23.3 % | 187 | 1.65 | 0.983 deg/s |
 
 Peak tracking rate is how fast the target attitude moves while following a limb or a ground station. Compare it against the rate the magnetorquers can sustain: at the mean control torque above, spinning up to 0.1 deg/s about the stiff axis takes on the order of a minute, so tracking is not the binding constraint -- the discrete slews between modes are.
-
-## Beta angle sweep
-
-| RAAN (deg) | Beta (deg) | Eclipse | Max eclipse (min) | Orbit-avg power (W) |
-| --- | --- | --- | --- | --- |
-| 0 | 2.0 | 39.0 % | 36.1 | 8.23 |
-| 45 | 31.9 | 37.5 % | 34.4 | 8.43 |
-| 90 | 51.6 | 32.5 % | 29.2 | 9.11 |
-| 135 | 35.4 | 36.7 % | 33.9 | 8.53 |
-| 180 | 2.1 | 38.8 % | 36.1 | 8.25 |
-| 225 | 31.8 | 36.2 % | 34.4 | 8.61 |
-| 270 | 51.5 | 30.5 % | 29.4 | 9.38 |
-| 315 | 35.3 | 35.8 % | 33.9 | 8.66 |

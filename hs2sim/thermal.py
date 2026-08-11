@@ -193,6 +193,242 @@ def _longest_run(mask: np.ndarray) -> int:
     return best
 
 
+# ---------------------------------------------------------------------------
+# Single-node (lumped) thermal model
+# ---------------------------------------------------------------------------
+
+STEFAN_BOLTZMANN = 5.670374419e-8
+
+
+def dissipation_fractions(cfg: MissionConfig,
+                          mean_torque_nm: float = 8.9e-6,
+                          mean_body_rate_rad_s: float = 1.7e-3) -> dict[str, float]:
+    """Fraction of each component's electrical input that becomes heat.
+
+    Everything a spacecraft draws ends up as heat except the energy that
+    physically leaves the vehicle. Two subsystems do that:
+
+    * **COMM** radiates RF. Of the transmitter's electrical input, only the
+      power that survives the PA, the impedance mismatch and the feed actually
+      leaves as an electromagnetic wave; the rest is dissipated on board. Using
+      the link budget's own numbers -- 2 W at the PA output, -3 dB return loss,
+      -1 dB circuit loss -- the radiated fraction is small, so the radio is
+      overwhelmingly a heater. The receiver radiates nothing at all.
+
+    * **ADCS** does mechanical work. A magnetorquer is a resistive coil; the
+      work it delivers is torque x body rate. At the torque this vehicle
+      actually achieves that is of order 1e-8 W against watts of input, so the
+      mechanical fraction is around a billionth. Magnetorquers are, thermally,
+      pure resistors -- unlike reaction wheels, they store no useful kinetic
+      energy, and the coil's field energy returns to the bus when it is
+      de-energised.
+
+    Returns a fraction in [0, 1] for each component in the power budget.
+    """
+    margin = 1.0 + float(cfg.power.margin)
+    radio = cfg.radio
+
+    # RF power that actually leaves the spacecraft, from the trusted link budget.
+    radiated_w = (float(radio.tx_power_w)
+                  * 10.0 ** (float(radio.return_loss_db) / 10.0)
+                  * 10.0 ** (float(radio.circuit_loss_db) / 10.0))
+    tx_input_w = float(cfg.power.components.radio_tx.peak_w) * margin
+    tx_heat_fraction = max(0.0, 1.0 - radiated_w / tx_input_w)
+
+    # Mechanical power delivered by the magnetorquers.
+    mechanical_w = mean_torque_nm * mean_body_rate_rad_s
+    fractions: dict[str, float] = {}
+    for name, spec in cfg.power.components.items():
+        input_w = float(spec.peak_w) * int(spec.qty) * margin
+        if name == "radio_tx":
+            fractions[name] = tx_heat_fraction
+        elif name.startswith("mtq"):
+            fractions[name] = max(0.0, 1.0 - mechanical_w / input_w)
+        else:
+            fractions[name] = 1.0
+    fractions["_rf_radiated_w"] = radiated_w
+    fractions["_mtq_mechanical_w"] = mechanical_w
+    return fractions
+
+
+def mode_heat_w(cfg: MissionConfig, mode: str,
+                fractions: dict[str, float],
+                heater_duty: float | None = None) -> float:
+    """Electrical load in a mode that ends up as heat inside the spacecraft."""
+    duty_map = cfg.power.modes[mode]
+    margin = 1.0 + float(cfg.power.margin)
+    heater_duty = (float(cfg.power.heater_duty_cycle)
+                   if heater_duty is None else float(heater_duty))
+    total = 0.0
+    for component, duty in duty_map.items():
+        d = heater_duty if duty == "heater_duty" else float(duty)
+        spec = cfg.power.components[component]
+        input_w = float(spec.peak_w) * int(spec.qty) * margin
+        total += input_w * d * fractions[component]
+    return total
+
+
+@dataclasses.dataclass
+class SingleNodeResult:
+    temperature_k: np.ndarray
+    equilibrium_k: np.ndarray       # zero-capacitance limit, for comparison
+    absorbed_env_w: np.ndarray
+    internal_heat_w: np.ndarray
+    radiating_area_m2: float
+    effective_emissivity: float
+    thermal_capacitance_j_k: float
+    stats: dict[str, float]
+
+
+def single_node_temperature(cfg: MissionConfig,
+                            env: EnvironmentResult,
+                            dcm_BN: np.ndarray,
+                            array_normals: np.ndarray,
+                            array_peak_w: np.ndarray,
+                            is_deployable: np.ndarray,
+                            panel_count: np.ndarray,
+                            generation_w: np.ndarray,
+                            internal_heat_w: np.ndarray,
+                            settle_fraction: float = 0.2) -> SingleNodeResult:
+    """Integrate the lumped-capacitance energy balance.
+
+        C dT/dt = Q_solar + Q_albedo + Q_IR + Q_internal - P_electrical - e s A T^4
+
+    ``P_electrical`` is subtracted because power the cells export as electricity
+    leaves the thermal node; it comes back as ``Q_internal`` once the loads
+    dissipate it, so over an orbit the two nearly cancel and the residual is the
+    RF actually radiated away.
+
+    The first ``settle_fraction`` of the run is discarded from the statistics so
+    the reported min/max/mean are not polluted by the initial transient.
+    """
+    thermal_cfg = cfg.spacecraft.thermal
+    surfaces = thermal_cfg.surfaces
+    alpha_bus = float(surfaces.bus.alpha)
+    eps_bus = float(surfaces.bus.epsilon)
+    alpha_cell = float(surfaces.solar_cell.alpha)
+    eps_cell = float(surfaces.solar_cell.epsilon)
+    alpha_back = float(surfaces.panel_back.alpha)
+    eps_back = float(surfaces.panel_back.epsilon)
+
+    solar_constant = float(cfg.env.solar_constant_w_m2)
+    albedo_coeff = float(cfg.env.earth_albedo)
+    earth_ir = float(cfg.env.earth_ir_w_m2)
+
+    areas = face_areas(cfg)
+    names = list(FACES)
+    body_normals = np.stack([FACES[n] for n in names])
+    normals_N = np.einsum("nji,fj->nfi", dcm_BN, body_normals)
+
+    sun_hat = env.sun_unit()
+    nadir = env.nadir_unit()
+    cos_sun = np.clip(np.einsum("nfi,ni->nf", normals_N, sun_hat), 0.0, None)
+    lit = cos_sun * env.shadow_factor[:, None]
+    view = _view_factor_to_earth(env, normals_N)
+    sun_over_nadir = np.clip(np.einsum("ni,ni->n", -nadir, sun_hat), 0.0, None)
+
+    # Body faces. A face carrying cells (geometry C's +y) takes cell optics.
+    # Membership is decided by the panel's `deployable` flag, not by comparing
+    # normals: geometry A's wing points along -x, which coincides with a body
+    # face direction without being one.
+    cell_faces = set()
+    for k, normal in enumerate(np.asarray(array_normals)):
+        if is_deployable[k]:
+            continue
+        for f, name in enumerate(names):
+            if np.dot(normal, body_normals[f]) > 0.999:
+                cell_faces.add(name)
+
+    absorbed = np.zeros(env.n_samples)
+    radiating_area = 0.0
+    emissivity_area = 0.0
+    for f, name in enumerate(names):
+        area = areas[name]
+        on_cells = name in cell_faces
+        alpha = alpha_cell if on_cells else alpha_bus
+        eps = eps_cell if on_cells else eps_bus
+        absorbed += alpha * area * solar_constant * lit[:, f]
+        absorbed += alpha * area * view[:, f] * solar_constant * albedo_coeff * sun_over_nadir
+        absorbed += eps * area * view[:, f] * earth_ir
+        radiating_area += area
+        emissivity_area += eps * area
+
+    # Deployable wing: cells on the front, bare substrate on the back. Body
+    # faces already counted above are excluded so nothing is double-counted.
+    panel_area = float(thermal_cfg.panel_area_m2)
+    for k, normal in enumerate(np.asarray(array_normals)):
+        if not is_deployable[k]:
+            continue  # body-mounted, already counted as a bus face
+        wing_area = float(panel_count[k]) * panel_area
+        front_N = np.einsum("nji,j->ni", dcm_BN, np.asarray(normal, dtype=float))
+        for sign, alpha, eps in ((1.0, alpha_cell, eps_cell),
+                                 (-1.0, alpha_back, eps_back)):
+            face_N = sign * front_N
+            cos_s = np.clip(np.einsum("ni,ni->n", face_N, sun_hat), 0.0, None)
+            v = _view_factor_to_earth(env, face_N[:, None, :])[:, 0]
+            absorbed += alpha * wing_area * solar_constant * cos_s * env.shadow_factor
+            absorbed += (alpha * wing_area * v * solar_constant * albedo_coeff
+                         * sun_over_nadir)
+            absorbed += eps * wing_area * v * earth_ir
+            radiating_area += wing_area
+            emissivity_area += eps * wing_area
+
+    effective_emissivity = emissivity_area / radiating_area
+    capacitance = (float(cfg.spacecraft.bus.mass_kg)
+                   * float(thermal_cfg.specific_heat_j_per_kg_k))
+
+    # Net heat into the node. Electricity exported by the cells leaves here and
+    # re-enters through internal_heat_w once the loads consume it.
+    net_in = absorbed + internal_heat_w - generation_w
+    sigma_ea = effective_emissivity * STEFAN_BOLTZMANN * radiating_area
+
+    equilibrium = (np.clip(net_in, 1e-9, None) / sigma_ea) ** 0.25
+
+    temperature = np.empty(env.n_samples)
+    t_now = float(np.mean(equilibrium))
+    dt = env.dt_s
+    for i in range(env.n_samples):
+        t_now += (net_in[i] - sigma_ea * t_now ** 4) * dt / capacitance
+        t_now = max(t_now, 3.0)
+        temperature[i] = t_now
+
+    start = int(settle_fraction * env.n_samples)
+    settled = temperature[start:]
+    limits = thermal_cfg.limits_c
+    stats = {
+        "mean_c": float(np.mean(settled) - 273.15),
+        "min_c": float(np.min(settled) - 273.15),
+        "max_c": float(np.max(settled) - 273.15),
+        "swing_c": float(np.max(settled) - np.min(settled)),
+        "equilibrium_mean_c": float(np.mean(equilibrium[start:]) - 273.15),
+        "equilibrium_min_c": float(np.min(equilibrium[start:]) - 273.15),
+        "equilibrium_max_c": float(np.max(equilibrium[start:]) - 273.15),
+        "mean_absorbed_env_w": float(np.mean(absorbed)),
+        "mean_internal_heat_w": float(np.mean(internal_heat_w)),
+        "mean_electrical_export_w": float(np.mean(generation_w)),
+        "time_constant_min": float(
+            capacitance / (4.0 * sigma_ea * float(np.mean(settled)) ** 3) / 60.0),
+        "battery_margin_cold_c": float(np.min(settled) - 273.15
+                                       - float(limits.battery_min)),
+        "battery_margin_hot_c": float(float(limits.battery_max)
+                                      - (np.max(settled) - 273.15)),
+        "electronics_margin_cold_c": float(np.min(settled) - 273.15
+                                           - float(limits.electronics_min)),
+        "electronics_margin_hot_c": float(float(limits.electronics_max)
+                                          - (np.max(settled) - 273.15)),
+    }
+    return SingleNodeResult(
+        temperature_k=temperature,
+        equilibrium_k=equilibrium,
+        absorbed_env_w=absorbed,
+        internal_heat_w=internal_heat_w,
+        radiating_area_m2=radiating_area,
+        effective_emissivity=effective_emissivity,
+        thermal_capacitance_j_k=capacitance,
+        stats=stats,
+    )
+
+
 def eclipse_statistics(env: EnvironmentResult) -> dict[str, float]:
     """Eclipse duty cycle and worst-case duration -- the survival heating case."""
     eclipsed = env.shadow_factor < 0.5

@@ -96,26 +96,24 @@ def make_all(cfg: MissionConfig, env: EnvironmentResult,
     fig.savefig(out_dir / "array_trade.png", dpi=140)
     plt.close(fig)
 
-    # -- beta / eclipse sweep ------------------------------------------------
-    if "raan_sweep" in results:
-        rows = results["raan_sweep"]
-        beta = [r["beta_deg"] for r in rows]
-        order = np.argsort(beta)
-        beta = np.array(beta)[order]
-        eclipse = np.array([r["eclipse_fraction"] * 100 for r in rows])[order]
-        gen = np.array([r["orbit_average_w"] for r in rows])[order]
-
-        fig, ax1 = plt.subplots(figsize=(7.5, 4.5))
-        ax1.plot(beta, eclipse, "o-", color="#3d5a80", label="eclipse fraction")
-        ax1.set_xlabel("Beta angle (deg)")
-        ax1.set_ylabel("Eclipse fraction (%)", color="#3d5a80")
-        ax1.grid(alpha=0.3)
-        ax2 = ax1.twinx()
-        ax2.plot(beta, gen, "s--", color="#ee6c4d", label="orbit-average power")
-        ax2.set_ylabel("Orbit-average power (W)", color="#ee6c4d")
-        ax1.set_title("Beta angle drives eclipse time and array output")
+    # -- single node temperature --------------------------------------------
+    if "temperature_series_c" in results["geometries"][names[0]]:
+        fig, ax = plt.subplots(figsize=(9, 4.5))
+        for name in names:
+            entry = results["geometries"][name]
+            ax.plot(entry["temperature_series_t_h"], entry["temperature_series_c"],
+                    lw=1.0, label=name)
+        limits = cfg.spacecraft.thermal.limits_c
+        ax.axhline(float(limits.battery_min), color="#3d5a80", ls="--", lw=1,
+                   label="battery limits")
+        ax.axhline(float(limits.battery_max), color="#3d5a80", ls="--", lw=1)
+        ax.set_xlabel("Time (hours)")
+        ax.set_ylabel("Bulk temperature (deg C)")
+        ax.set_title("Single-node spacecraft temperature")
+        ax.grid(alpha=0.3)
+        ax.legend(fontsize=8)
         fig.tight_layout()
-        fig.savefig(out_dir / "beta_sweep.png", dpi=140)
+        fig.savefig(out_dir / "temperature.png", dpi=140)
         plt.close(fig)
 
     # -- payload rate wall ---------------------------------------------------

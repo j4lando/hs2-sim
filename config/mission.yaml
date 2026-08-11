@@ -37,9 +37,6 @@ environment:
   magnetic_model: dipole      # dipole | wmm
 
 analysis:
-  # Beta angle sweep for the power/thermal trade. Each entry re-runs the
-  # propagation with a different RAAN, which is what actually moves beta.
-  raan_sweep_deg: [0.0, 45.0, 90.0, 135.0, 180.0, 225.0, 270.0, 315.0]
   # Payload cadence candidates (experiments per second). The budget assumed
   # 0.2 Hz; the user asked for this to be a free parameter.
   payload_rate_hz_sweep: [0.02, 0.05, 0.1, 0.2, 0.5, 1.0]
