@@ -151,7 +151,6 @@ def main() -> int:
     # ------------------------------------------------ payload rate ceilings
     usb_fps = comms.usb2_max_fps(cfg)
     img_b = comms.image_bytes(cfg)
-    images_per_experiment_const = int(cfg.payload.n_cameras)
     results["payload_limits"] = {
         "image_bytes_compressed": img_b,
         "image_bytes_raw": img_b * 2,
@@ -282,28 +281,8 @@ def main() -> int:
             s["requested_rate_hz"] = float(rate)
             sweep.append(s)
         entry["payload_rate_sweep"] = sweep
-
-        # Keep the flown attitude and telemetry so Vizard can replay them.
-        # Payload storage holds every image taken inside the retention window,
-        # so the occupancy is a trailing sum rather than a running total.
-        retention_s = 24 * 3600.0
-        window = max(1, int(retention_s / env.dt_s))
-        image_bytes_per_sample = (result.experiments
-                                  * images_per_experiment_const * img_b)
-        cumulative = np.concatenate([[0.0], np.cumsum(image_bytes_per_sample)])
-        stored = cumulative[1:] - cumulative[np.maximum(
-            0, np.arange(env.n_samples) + 1 - window)]
-        flown_attitudes[array.name] = {
-            "dcm_BN": result.dcm_BN,
-            "telemetry": {
-                "soc": result.soc,
-                "net_w": result.generation_w - result.load_w,
-                "mode": result.mode,
-                "stored_bytes": stored,
-                "temperature_c": node.temperature_k - 273.15,
-                "temp_floor_c": float(cfg.spacecraft.thermal.limits_c.electronics_min),
-            },
-        }
+        # Keep the flown attitude so it can be handed to Vizard afterwards.
+        flown_attitudes[array.name] = result.dcm_BN
         per_geometry[array.name] = entry
 
     results["geometries"] = per_geometry
@@ -388,13 +367,10 @@ def main() -> int:
                 f"{', '.join(flown_attitudes)}")
         else:
             log(f"Exporting the {choice} CONOPS timeline for Vizard...")
-            saved = vizard.export(cfg, env, flown_attitudes[choice]["dcm_BN"],
+            saved = vizard.export(cfg, env, flown_attitudes[choice],
                                   RESULTS_DIR, name=f"hs2_conops_{choice}",
                                   stride=args.vizard_stride,
-                                  live_stream=args.vizard_live,
-                                  telemetry=vizard.decimate(
-                                      flown_attitudes[choice]["telemetry"],
-                                      args.vizard_stride))
+                                  live_stream=args.vizard_live)
             if args.vizard_live:
                 log("  live stream finished")
             elif saved is None:

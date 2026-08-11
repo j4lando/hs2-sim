@@ -80,6 +80,42 @@ def principal_angle(dcm_a: np.ndarray, dcm_b: np.ndarray) -> float:
     return float(np.arccos(np.clip(cos_theta, -1.0, 1.0)))
 
 
+def slerp_dcm(dcm_a: np.ndarray, dcm_b: np.ndarray, fraction: float) -> np.ndarray:
+    """Rotate along the shortest geodesic from ``dcm_a`` to ``dcm_b``.
+
+    Slews take minutes here, so snapping straight from the old attitude to the
+    new one at the end would misreport both the array output during the slew and
+    the motion a visualiser shows. Interpolating along the principal rotation
+    axis is the eigenaxis manoeuvre a real controller approximates anyway.
+    """
+    fraction = float(np.clip(fraction, 0.0, 1.0))
+    rel = dcm_b @ dcm_a.T
+    cos_theta = np.clip((np.trace(rel) - 1.0) / 2.0, -1.0, 1.0)
+    theta = math.acos(cos_theta)
+    if theta < 1e-9:
+        return dcm_b if fraction >= 1.0 else dcm_a.copy()
+
+    axis = np.array([rel[2, 1] - rel[1, 2],
+                     rel[0, 2] - rel[2, 0],
+                     rel[1, 0] - rel[0, 1]])
+    norm = np.linalg.norm(axis)
+    if norm < 1e-12:
+        # 180 deg rotation: the skew part vanishes, so take the axis from the
+        # symmetric part instead.
+        eigenvalues, eigenvectors = np.linalg.eigh((rel + np.eye(3)) / 2.0)
+        axis = eigenvectors[:, int(np.argmax(eigenvalues))]
+    else:
+        axis = axis / norm
+
+    angle = theta * fraction
+    skew = np.array([[0.0, -axis[2], axis[1]],
+                     [axis[2], 0.0, -axis[0]],
+                     [-axis[1], axis[0], 0.0]])
+    partial = (np.eye(3) + math.sin(angle) * skew
+               + (1.0 - math.cos(angle)) * (skew @ skew))
+    return partial @ dcm_a
+
+
 def downlink_attitude(env: EnvironmentResult,
                       station_index: np.ndarray,
                       sun_dcm: np.ndarray,
@@ -158,6 +194,8 @@ def simulate(cfg: MissionConfig,
     downlink_trigger = float(policy.downlink_trigger_bytes)
     intra_mode_slew_threshold = math.radians(
         float(policy.intra_mode_slew_threshold_deg))
+    pointing_accuracy = math.radians(
+        float(cfg.spacecraft.adcs.pointing_accuracy_deg))
 
     inertia = inertia_matrix(cfg)
     slew_margin = float(cfg.spacecraft.adcs.settle_margin)
@@ -190,7 +228,8 @@ def simulate(cfg: MissionConfig,
     current_dcm = standby_dcm[0]
     current_mode = MODE_STANDBY
     pending_mode = MODE_STANDBY
-    slew_remaining = 0.0
+    slewing = False
+    slew_rate = 0.0
     slew_count = 0
     slew_seconds = 0.0
     battery_limited = False
@@ -247,33 +286,43 @@ def simulate(cfg: MissionConfig,
         #     held limb point illegal, the only legal attitudes can be on the
         #     far side of Earth, which is a >100 deg reorientation.
         # Anything above the threshold is treated as a real slew.
-        if slew_remaining <= 0:
-            angle = principal_angle(current_dcm, target_dcm)
-            mode_changed = target_mode != current_mode
-            needs_slew = angle > intra_mode_slew_threshold or (
-                mode_changed
-                and angle > math.radians(float(cfg.spacecraft.adcs.pointing_accuracy_deg)))
-            if needs_slew:
-                slew_remaining = slew_time_s(angle, j_typical, typical_torque,
-                                             slew_margin)
+        angle_to_target = principal_angle(current_dcm, target_dcm)
+        mode_changed = target_mode != current_mode
+
+        if not slewing:
+            if angle_to_target > intra_mode_slew_threshold or (
+                    mode_changed and angle_to_target > pointing_accuracy):
+                slewing = True
                 slew_count += 1
                 pending_mode = target_mode
+                # Average rate the magnetorquers can sustain for a slew of this
+                # size. Slew time goes as sqrt(angle), so bigger repoints get a
+                # higher average rate, which is the bang-bang result.
+                slew_rate = angle_to_target / slew_time_s(
+                    angle_to_target, j_typical, typical_torque, slew_margin)
             elif mode_changed:
                 current_mode = target_mode
 
-        if slew_remaining > 0:
+        if slewing:
             mode[i] = MODE_SLEW
+            # Rate-limited follower: the vehicle turns toward wherever it is
+            # currently commanded, by at most slew_rate * dt per step. Bounding
+            # the step is what makes the attitude continuous *by construction* --
+            # if the target jumps mid-manoeuvre (the feasible limb region can
+            # flip to the far side of Earth), the slew simply takes longer
+            # instead of the vehicle teleporting.
+            step = min(angle_to_target, slew_rate * dt)
+            if angle_to_target > 1e-12:
+                current_dcm = slerp_dcm(current_dcm, target_dcm,
+                                        step / angle_to_target)
             flown[i] = current_dcm
-            # Attitude during a slew is whatever we are rotating away from, so
-            # the array output has to be evaluated for this one sample.
             cosines = np.clip(sun_hat[i] @ (current_dcm.T @ array.normals.T), 0.0, None)
             generation[i] = float(cosines @ array.peak_w
                                   * env.shadow_factor[i] * array_efficiency)
             load[i] = loads["slew"]
-            slew_remaining -= dt
             slew_seconds += dt
-            if slew_remaining <= 0:
-                current_dcm = target_dcm
+            if principal_angle(current_dcm, target_dcm) <= pointing_accuracy:
+                slewing = False
                 current_mode = pending_mode
         else:
             mode[i] = current_mode

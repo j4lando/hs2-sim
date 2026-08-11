@@ -36,6 +36,21 @@ environment:
   # inside its validity window; 'dipole' is valid for any epoch.
   magnetic_model: dipole      # dipole | wmm
 
+# ---------------------------------------------------------------------------
+# Vizard scene settings. Purely cosmetic -- nothing here affects the analysis.
+# ---------------------------------------------------------------------------
+vizard:
+  # Sensor cones are spacecraft-scale markers, not planet-scale volumes. The
+  # stock Basilisk examples use 10 m; anything approaching orbit altitude fills
+  # the screen and hides everything else.
+  cone_height_m: 12.0
+  # Ground stations: dim marker normally, bright and enlarged while the
+  # spacecraft is above their elevation mask.
+  station_idle_color: [255, 200, 0, 80]
+  station_active_color: [40, 255, 130, 255]
+  station_idle_marker_scale: 1.0
+  station_active_marker_scale: 4.0
+
 analysis:
   # Payload cadence candidates (experiments per second). The budget assumed
   # 0.2 Hz; the user asked for this to be a free parameter.

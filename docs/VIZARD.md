@@ -62,8 +62,9 @@ results/_VizFiles/hs2_conops_<geometry>_UnityViz.bin
 ```
 
 `--vizard-stride` defaults to 4, so a 3-day run at a 5 s step becomes ~13,000
-frames. Stride 1 quadruples that; it is smoother but the file grows in
-proportion.
+frames at 20 s apart. **For watching slews, use `--vizard-stride 1`**: a slew
+takes about six minutes, which is only ~18 frames at the default and looks
+steppy, versus ~72 frames at stride 1.
 
 ## 3b. Verify the recording without Vizard
 
@@ -112,32 +113,34 @@ in a few seconds and every mode change blurs together, which makes the attitude
 look static. Drop to ~60× to actually see the vehicle slew between
 sun-pointing, limb-staring and ground-station tracking.
 
+Slews are modelled as continuous eigenaxis rotations at a magnetorquer-limited
+rate, not as instant snaps, so the vehicle visibly turns. Peak rate is about
+0.9 °/s and a large repoint takes several minutes.
+
 **A straight line through the spacecraft?** That is a Vizard HUD element, not
 something in the recording — the export contains no point-lines, no target
 lines and no scripted cameras. It is almost certainly the boresight line of the
 **Standard Camera** panel (the inset window titled "Standard Camera 1"). Close
 that panel, or toggle the camera boresight HUD, and it disappears.
 
-## 4b. Telemetry gauges
+## 4b. The payload camera views
 
-The export drives Vizard's generic storage panel with the CONOPS telemetry, so
-you can watch the state of the spacecraft alongside its motion. Open it with
-the spacecraft's instrument panel (it is enabled by default in the export):
+Two scripted cameras are exported, looking exactly down the payload boresights
+at those instruments' real fields of view:
 
-| Gauge | Shows | Colour |
+| Camera | Axis | Field of view (edge-to-edge) |
 | --- | --- | --- |
-| Battery | Stored energy against the 75.6 Wh pack | red below the depth-of-discharge floor, amber near it, green above |
-| Payload storage | Image data held on board against 128 GB | blue, amber above 70 %, red above 90 % |
-| Temperature | Bulk single-node temperature, drawn as degrees above the −40 °C electronics limit | blue when below the battery cold limit, green in band, red above the battery hot limit |
-| Mode | safe / standby / slew / experiment / downlink | grey, blue, amber, green, magenta in that order |
+| `LOST camera (+z)` | +z | 25.2° |
+| `FOUND camera (+x)` | +x | 74° |
 
-There is also an **S-band transceiver** HUD on the +x face: it animates as
-*sending* during downlink passes and *receiving* otherwise.
+Pick either from Vizard's camera dropdown to see what that instrument sees at
+that instant. This is the view to use when checking whether FOUND really is on
+a sunlit limb, rather than trying to judge it from the outside.
 
-Two notes on reading them. Temperature is offset because Vizard's bars start at
-zero and the spacecraft goes below 0 °C — the label states the offset. Payload
-storage is the data held inside the 24-hour retention window, not a running
-total, so it plateaus rather than climbing forever.
+Note the free-look Vizard camera has nothing to do with these — it is wherever
+you last dragged it. If the outside view and the sensor cones seem to disagree,
+you are comparing the free camera against a body-fixed boresight; switch to the
+scripted camera instead.
 
 ## 5. What you are looking at
 
@@ -158,19 +161,42 @@ the cone becomes **solid**. It is a subtle change and easy to miss with the
 station cones also on screen — turn the ground-station cones off under
 `Edit Location` if you want to watch it clearly.
 
+The cones are drawn at spacecraft scale (12 m, set by `vizard.cone_height_m`
+in `config/mission.yaml`), matching the convention in Basilisk's own examples.
+Drawing them out to orbit altitude makes them fill the screen and hide
+everything else.
+
 **These cones are drawn all the time, but the constraints only apply in
 experiment mode.** The payload is off in standby and downlink, so the LOST
 cone sweeping across Earth then is expected and is not a violation. Use the
-**Mode** gauge to tell which mode is active before judging a cone. Over a
-3-day run the vehicle is roughly 43 % limb-staring, 54 % sun-pointing and 5 %
-slewing, so most of the time you are watching a mode where those cones simply
-do not apply.
+payload is off outside experiment mode. Over a 3-day run the vehicle spends
+roughly 15 % of the time in experiment mode, 36 % sun-pointing and 48 %
+slewing, so most of what you are watching is a mode where those cones do not
+apply.
 
-The yellow markers on Earth are the Leaf Space sites, each drawn with the cone
-its 10° elevation mask sweeps — a 160° edge-to-edge cone about that site's own
-local vertical, so the cones radiate outward from the globe rather than fanning
-off in a common direction. Watch Reykjavík: at 64°N it never comes into
-view, because a 51.6° inclination ground track cannot reach it.
+**Ground stations light up when they have the spacecraft.** Each site is a dim
+marker normally, and switches to a bright enlarged marker while the spacecraft
+is above its 10° elevation mask. Colours and marker sizes are in
+`config/mission.yaml` under `vizard`. Watch Reykjavík: at 64°N it never lights
+up at all, because a 51.6° inclination ground track cannot reach it.
+
+Each site also carries the cone its elevation mask sweeps — 160° edge-to-edge
+about that site's own local vertical, drawn out to the true maximum slant range
+(~1480 km at this altitude) rather than an arbitrary radius.
+
+### Angle conventions, verified
+
+Two different conventions are in play, which is easy to get backwards:
+
+| Quantity | Convention | Source |
+| --- | --- | --- |
+| Cone `incidenceAngle` | **half**-angle from boresight | `constrainedAttitudeManeuver` tests `dot(boresight, body) >= cos(Fov)`, and Basilisk's own example feeds the same value to both the cone and that module |
+| Camera / location `fieldOfView` | **edge-to-edge** (full cone) | stated in `vizMessage.proto` |
+
+So the 40° and 70° Sun exclusions go in unchanged, FOUND's 74° full-cone FOV
+goes in as a 37° cone half-angle, and the camera FOVs go in as the full 25.2°
+and 74°. `hs2sim.vizcheck` asserts the recording matches
+`config/spacecraft.yaml` on every one of these.
 
 ## 6. Live streaming instead of a file
 

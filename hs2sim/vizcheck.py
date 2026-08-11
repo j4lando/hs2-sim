@@ -78,6 +78,25 @@ def decode(path: pathlib.Path) -> list:
     return frames
 
 
+def _expected_angles():
+    """Sensor angles straight from config, for cross-checking the recording."""
+    try:
+        from .config import MissionConfig
+    except ImportError:
+        return None
+    sensors = MissionConfig().spacecraft.sensors
+    return {
+        "cone_half_angles": sorted([
+            float(sensors.star_tracker.sun_exclusion_deg),
+            float(sensors.lost_camera.earth_exclusion_deg),
+            float(sensors.found_camera.sun_exclusion_deg),
+            float(sensors.found_camera.fov_full_deg) / 2.0,
+        ]),
+        "camera_fovs": sorted([float(sensors.lost_camera.fov_full_deg),
+                               float(sensors.found_camera.fov_full_deg)]),
+    }
+
+
 def check(frames: list) -> tuple[list[tuple[str, bool, str]], dict]:
     """Run the physical sanity checks. Returns (results, extracted arrays)."""
     first = frames[0]
@@ -97,13 +116,17 @@ def check(frames: list) -> tuple[list[tuple[str, bool, str]], dict]:
     cones = [(c.coneName, c.toBodyName, c.isKeepIn, c.incidenceAngle,
               np.array(c.normalVector)) for c in first.settings.keepOutInCones]
 
-    # Telemetry gauges. A gauge that never moves is the classic symptom of an
-    # unsubscribed input message, so check the spread, not just the presence.
-    gauges = {}
-    for k, dev in enumerate(first.spacecraft[0].storageDevices):
-        values = np.array([f.spacecraft[0].storageDevices[k].currentValue
-                           for f in frames if f.spacecraft[0].storageDevices])
-        gauges[dev.label] = (values, dev.maxValue, dev.units)
+    expected = _expected_angles()
+    cameras = list(first.settings.standardCameraSettings)
+    station_records = sum(len(f.locations) for f in frames)
+
+    # Attitude continuity: a slew modelled as an instant snap shows up as a
+    # single enormous step between consecutive frames.
+    attitude_step_deg = np.array([
+        math.degrees(math.acos(float(np.clip(
+            (np.trace(_mrp_to_dcm(sc_sigma[i + 1]) @ _mrp_to_dcm(sc_sigma[i]).T)
+             - 1.0) / 2.0, -1.0, 1.0))))
+        for i in range(len(sc_sigma) - 1)])
 
     altitude = np.linalg.norm(sc_r, axis=1) - R_EARTH
     h = np.cross(sc_r, sc_v)
@@ -151,27 +174,39 @@ def check(frames: list) -> tuple[list[tuple[str, bool, str]], dict]:
         ("Station boresights point at local zenith",
          boresight_error.size > 0 and boresight_error.max() < 1.0,
          f"max deviation {boresight_error.max():.2f} deg from local vertical"),
-        ("Telemetry gauges present",
-         len(gauges) >= 4,
-         ", ".join(label.split(":")[0].split("(")[0].strip()
-                   for label in gauges) or "none"),
-        ("Every gauge varies over time",
-         bool(gauges) and all(len(np.unique(np.round(v, 6))) > 1
-                              for v, _, _ in gauges.values()),
-         "; ".join(f"{lab.split(':')[0].split('(')[0].strip()} "
-                   f"{v.min():.3g}-{v.max():.3g} of {m:.3g}"
-                   for lab, (v, m, _) in gauges.items())),
         ("Constraint cones attached",
          len(cones) == 4,
          f"{len(cones)} cones"),
-        ("Cone angles are the configured ones (degrees)",
-         sorted(round(c[3]) for c in cones) == [37, 40, 40, 70],
-         ", ".join(f"{c[3]:.0f}" for c in cones) + " deg"),
+        # Cone incidenceAngle is a HALF angle (verified against Basilisk's
+        # constrainedAttitudeManeuver, which tests dot >= cos(Fov)), so the
+        # exclusion half-cones go in unchanged and the full-cone FOV halved.
+        ("Cone half-angles match config",
+         expected is None or
+         sorted(round(c[3], 3) for c in cones) == [round(a, 3) for a in
+                                                   expected["cone_half_angles"]],
+         ", ".join(f"{c[3]:.1f}" for c in sorted(cones, key=lambda x: x[3]))
+         + " deg vs config "
+         + (", ".join(f"{a:.1f}" for a in expected["cone_half_angles"])
+            if expected else "n/a")),
+        # Camera fieldOfView is EDGE-TO-EDGE per the protobuf, so the full-cone
+        # FOV goes in unchanged.
+        ("Payload cameras match config FOV (edge-to-edge)",
+         expected is None or
+         sorted(round(c.fieldOfView, 3) for c in cameras) ==
+         [round(a, 3) for a in expected["camera_fovs"]],
+         ", ".join(f"{c.displayName}={c.fieldOfView:.1f}" for c in cameras)
+         or "no cameras"),
+        ("Attitude is continuous (no instantaneous repoints)",
+         attitude_step_deg.size == 0 or attitude_step_deg.max() < 45.0,
+         f"largest step {attitude_step_deg.max():.1f} deg/frame, "
+         f"median {np.median(attitude_step_deg):.2f}"),
+        ("Ground stations re-highlighted on access changes",
+         station_records > len(stations),
+         f"{station_records} location records over {len(frames)} frames"),
     ]
 
     data = {"sc_r": sc_r, "sc_v": sc_v, "sc_sigma": sc_sigma, "sun": sun,
-            "stations": stations, "cones": cones, "bodies": bodies,
-            "gauges": gauges}
+            "stations": stations, "cones": cones, "bodies": bodies}
 
     # End-to-end check: do the attitudes actually written into the file satisfy
     # the experiment-mode constraints, and for what fraction of the run? Only

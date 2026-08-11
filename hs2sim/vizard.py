@@ -8,16 +8,26 @@ that ``vizInterface`` records into a Vizard binary.
 
 What ends up in the scene:
 
-  * the spacecraft flying the actual CONOPS attitude, so you can watch it slew
-    between sun-pointing, limb-staring and ground-station tracking;
-  * every Leaf Space ground station, with its 10 deg elevation cone;
-  * the four pointing constraints as live keep-in / keep-out cones. Vizard
-    draws a cone translucent when its condition is satisfied and solid when it
-    is violated. Note the cones are always present, while the constraints only
-    apply in experiment mode -- read the Mode gauge before judging one;
-  * the CONOPS telemetry on Vizard's gauges: battery, payload storage,
-    temperature and the current mode, plus an S-band transceiver that animates
-    during downlink passes.
+  * the spacecraft flying the actual CONOPS attitude;
+  * two scripted cameras looking exactly along the LOST (+z) and FOUND (+x)
+    boresights, at those instruments' real fields of view, so you can see what
+    each payload camera sees;
+  * every Leaf Space ground station, dim by default and brightly highlighted
+    while the spacecraft is above its elevation mask;
+  * the pointing constraints as keep-in / keep-out cones. Vizard draws a cone
+    translucent when its condition is satisfied and solid when it is violated.
+    The cones are always present while the constraints only apply in experiment
+    mode, so a cone crossing Earth during sun-pointing is expected.
+
+**Angle conventions**, which are easy to get backwards and were verified
+against Basilisk's own constraint module:
+
+  * ``createConeInOut(incidenceAngle=...)`` is a **half-angle** from the
+    boresight. ``constrainedAttitudeManeuver`` tests violations as
+    ``dot(boresight, body) >= cos(Fov)`` and the stock scenario passes the same
+    value to both, so a 40 deg Sun exclusion is passed as 40 deg.
+  * Camera and ground-station ``fieldOfView`` are **edge-to-edge** (full cone),
+    per the protobuf definitions, so a 25.2 deg full-cone FOV is passed as 25.2.
 
 See ``docs/VIZARD.md`` for how to install Vizard and open the result.
 """
@@ -32,15 +42,14 @@ import numpy as np
 
 from . import environment
 from .config import MissionConfig
-from .environment import EnvironmentResult
+from .environment import R_EARTH, EnvironmentResult
 
 # Vizard colours as RGBA-255.
-COLOR_KEEPOUT = [255, 60, 60, 128]
-COLOR_KEEPIN = [60, 220, 120, 128]
-COLOR_STATION = [255, 200, 0, 255]
+COLOR_KEEPOUT = [255, 60, 60, 110]
+COLOR_KEEPIN = [60, 220, 120, 110]
 
 
-def body_rates(dcm_BN: np.ndarray, dt: float) -> np.ndarray:
+def body_rates(dcm_BN: np.ndarray, dt_s: float) -> np.ndarray:
     """Body angular velocity from a DCM history, rad/s.
 
     The rotation from one sample to the next is ``dcm[i+1] @ dcm[i].T``; its
@@ -58,7 +67,7 @@ def body_rates(dcm_BN: np.ndarray, dt: float) -> np.ndarray:
         axis = np.array([rel[2, 1] - rel[1, 2],
                          rel[0, 2] - rel[2, 0],
                          rel[1, 0] - rel[0, 1]]) / (2.0 * math.sin(theta))
-        omega[i] = axis * theta / dt
+        omega[i] = axis * theta / dt_s
     omega[-1] = omega[-2] if n > 1 else 0.0
     return omega
 
@@ -91,68 +100,59 @@ def write_trajectory_file(env: EnvironmentResult,
     return len(index), dt_out
 
 
-MODE_COLORS = [
-    [150, 150, 150, 255],   # 0 safe
-    [70, 130, 200, 255],    # 1 standby   (sun-pointing, charging)
-    [230, 160, 40, 255],    # 2 slew
-    [80, 200, 100, 255],    # 3 experiment
-    [220, 70, 200, 255],    # 4 downlink
-]
+def max_slant_range_m(cfg: MissionConfig, elevation_deg: float) -> float:
+    """Slant range to a station sitting exactly on the elevation mask.
+
+    Solves the law-of-cosines triangle Earth centre / station / spacecraft, and
+    is what the ground-station coverage cone should be drawn out to. Using an
+    arbitrary large number instead just produces a cone that swamps the scene.
+    """
+    altitude = float(cfg.orbit.altitude_km) * 1e3
+    elevation = math.radians(elevation_deg)
+    return (math.sqrt((R_EARTH * math.sin(elevation)) ** 2
+                      + 2.0 * R_EARTH * altitude + altitude ** 2)
+            - R_EARTH * math.sin(elevation))
 
 
-class _TelemetryPlayback:
-    """Publishes the recorded CONOPS telemetry into Vizard's gauges.
+class _StationHighlighter:
+    """Brightens each ground station while it has access to the spacecraft.
 
-    Built lazily so importing this module does not require Basilisk. Vizard
-    reads battery and data-storage gauges from Basilisk messages, and takes the
-    value directly off the struct for gauges with no input message linked --
-    which is how the temperature and mode indicators are driven here.
+    Vizard sends the location list once and then clears it, so a station is
+    only re-transmitted if it is appended again. Re-sending all fifteen every
+    frame would bloat the recording, so this only republishes a station on the
+    frames where its access state actually flips -- a few hundred events over a
+    3-day run instead of a couple of hundred thousand.
     """
 
     def __new__(cls, *args, **kwargs):  # pragma: no cover - thin factory
         from Basilisk.architecture import sysModel
 
         class Impl(sysModel.SysModel):
-            def __init__(self, telemetry, dt_out, gauges, transceiver,
-                         battery_msg, data_msg, capacity_j, storage_capacity_b):
+            def __init__(self, viz, viz_support, station_names, access,
+                         dt_out, style):
                 super().__init__()
-                self.telemetry = telemetry
+                self.viz = viz
+                self.viz_support = viz_support
+                self.station_names = station_names
+                self.access = access
                 self.dt_out = dt_out
-                self.gauges = gauges
-                self.transceiver = transceiver
-                self.battery_msg = battery_msg
-                self.data_msg = data_msg
-                self.capacity_j = capacity_j
-                self.storage_capacity_b = storage_capacity_b
+                self.style = style
+                self.state = [None] * len(station_names)
 
             def UpdateState(self, CurrentSimNanos):
-                from Basilisk.architecture import messaging
-
                 index = min(int(round(CurrentSimNanos * 1e-9 / self.dt_out)),
-                            len(self.telemetry["soc"]) - 1)
-
-                battery = messaging.PowerStorageStatusMsgPayload()
-                battery.storageLevel = float(
-                    self.telemetry["soc"][index]) * self.capacity_j
-                battery.storageCapacity = self.capacity_j
-                battery.currentNetPower = float(self.telemetry["net_w"][index])
-                self.battery_msg.write(battery, CurrentSimNanos, self.moduleID)
-
-                data = messaging.DataStorageStatusMsgPayload()
-                data.storageLevel = float(self.telemetry["stored_bytes"][index])
-                data.storageCapacity = self.storage_capacity_b
-                self.data_msg.write(data, CurrentSimNanos, self.moduleID)
-
-                # No input message on these two, so Vizard uses the struct value.
-                self.gauges["temperature"].currentValue = float(
-                    self.telemetry["temperature_c"][index]
-                    - self.telemetry["temp_floor_c"])
-                mode = int(self.telemetry["mode"][index])
-                self.gauges["mode"].currentValue = mode + 0.5
-
-                if self.transceiver is not None:
-                    # 1 = sending, 2 = receiving. The receiver is always on.
-                    self.transceiver.transceiverState = 1 if mode == 4 else 2
+                            self.access.shape[1] - 1)
+                for s, name in enumerate(self.station_names):
+                    active = bool(self.access[s, index])
+                    if active == self.state[s]:
+                        continue
+                    self.state[s] = active
+                    self.viz_support.changeLocation(
+                        self.viz, name,
+                        color=(self.style["active_color"] if active
+                               else self.style["idle_color"]),
+                        markerScale=(self.style["active_scale"] if active
+                                     else self.style["idle_scale"]))
 
         return Impl(*args, **kwargs)
 
@@ -163,8 +163,7 @@ def export(cfg: MissionConfig,
            out_dir: pathlib.Path,
            name: str = "hs2_conops",
            stride: int = 1,
-           live_stream: bool = False,
-           telemetry: dict | None = None) -> pathlib.Path | None:
+           live_stream: bool = False) -> pathlib.Path | None:
     """Produce a Vizard binary for the supplied attitude timeline.
 
     Returns the path to the saved file, or None if Basilisk was built without
@@ -221,19 +220,9 @@ def export(cfg: MissionConfig,
     replay.convertPosToMeters = 1.0  # already metres
     sim.AddModelToTask(task, replay)
 
-    gauges, transceiver, playback = _build_telemetry(
-        cfg, sim, task, telemetry, dt_out, stride)
-
     save_file = None if live_stream else str(out_dir / name)
     viz = vizSupport.enableUnityVisualization(
-        sim, task, [sc], saveFile=save_file, liveStream=live_stream,
-        genericStorageList=[list(gauges.values())] if gauges else None,
-        transceiverList=[[transceiver]] if transceiver else None)
-
-    if gauges:
-        vizSupport.setInstrumentGuiSetting(viz, spacecraftName=sc.ModelTag,
-                                           showGenericStoragePanel=1,
-                                           showTransceiverLabels=1)
+        sim, task, [sc], saveFile=save_file, liveStream=live_stream)
 
     viz.settings.showSpacecraftLabels = 1
     viz.settings.orbitLinesOn = 1
@@ -244,8 +233,11 @@ def export(cfg: MissionConfig,
     viz.scData[0].spacecraftName = sc.ModelTag
     viz.scData[0].scStateInMsg.subscribeTo(replay.scStateOutMsgs[0])
 
+    _add_payload_cameras(cfg, viz, vizSupport, sc.ModelTag)
     _add_ground_stations(cfg, viz, vizSupport)
     _add_constraint_cones(cfg, viz, vizSupport, sc.ModelTag)
+    _add_station_highlighting(cfg, sim, task, viz, vizSupport, env, stride,
+                              dt_out)
 
     sim.InitializeSimulation()
     sim.ConfigureStopTime(macros.sec2nano((rows - 1) * dt_out))
@@ -257,94 +249,32 @@ def export(cfg: MissionConfig,
     return out_dir / "_VizFiles" / f"{name}_UnityViz.bin"
 
 
-def _build_telemetry(cfg, sim, task, telemetry, dt_out, stride):
-    """Create the Vizard gauges and the module that drives them each step."""
-    if not telemetry:
-        return {}, None, None
+def _add_payload_cameras(cfg: MissionConfig, viz, vizSupport,
+                         body_name: str) -> None:
+    """Scripted cameras looking down the LOST and FOUND boresights.
 
-    from Basilisk.architecture import messaging
-    from Basilisk.simulation import vizInterface
-
-    battery_cfg = cfg.spacecraft.battery
-    limits = cfg.spacecraft.thermal.limits_c
-    capacity_j = float(battery_cfg.capacity_wh) * 3600.0
-    floor_pct = int(round(100 * (1.0 - float(battery_cfg.depth_of_discharge_limit))))
-    storage_capacity_b = float(cfg.payload.storage_gb) * 1e9
-
-    battery_gauge = vizInterface.GenericStorage()
-    battery_gauge.label = "Battery"
-    battery_gauge.units = "J"
-    battery_gauge.maxValue = capacity_j
-    # Red below the depth-of-discharge floor, amber approaching it, else green.
-    battery_gauge.color = vizInterface.IntVector(
-        [200, 60, 60, 255] + [230, 170, 40, 255] + [80, 200, 100, 255])
-    battery_gauge.thresholds = vizInterface.IntVector(
-        [floor_pct, min(99, floor_pct + 15)])
-
-    data_gauge = vizInterface.GenericStorage()
-    data_gauge.label = "Payload storage"
-    data_gauge.units = "bytes"
-    data_gauge.maxValue = storage_capacity_b
-    data_gauge.color = vizInterface.IntVector(
-        [80, 160, 220, 255] + [230, 170, 40, 255] + [200, 60, 60, 255])
-    data_gauge.thresholds = vizInterface.IntVector([70, 90])
-
-    # Vizard gauges start at zero, so temperature is shown as degrees above the
-    # electronics cold limit; the label says so.
-    temp_floor = float(limits.electronics_min)
-    temp_span = float(limits.electronics_max) - temp_floor
-    temp_gauge = vizInterface.GenericStorage()
-    temp_gauge.label = f"Temperature (0 = {temp_floor:.0f} C)"
-    temp_gauge.units = "degC above min"
-    temp_gauge.maxValue = temp_span
-    battery_cold = (float(limits.battery_min) - temp_floor) / temp_span * 100
-    battery_hot = (float(limits.battery_max) - temp_floor) / temp_span * 100
-    temp_gauge.color = vizInterface.IntVector(
-        [90, 150, 255, 255] + [80, 200, 100, 255] + [220, 90, 60, 255])
-    temp_gauge.thresholds = vizInterface.IntVector(
-        [int(round(battery_cold)), int(round(battery_hot))])
-
-    mode_gauge = vizInterface.GenericStorage()
-    mode_gauge.label = "Mode: safe|standby|slew|experiment|downlink"
-    mode_gauge.units = "mode"
-    mode_gauge.maxValue = 5.0
-    mode_gauge.color = vizInterface.IntVector(
-        [c for colour in MODE_COLORS for c in colour])
-    mode_gauge.thresholds = vizInterface.IntVector([20, 40, 60, 80])
-
-    gauges = {"battery": battery_gauge, "data": data_gauge,
-              "temperature": temp_gauge, "mode": mode_gauge}
-
-    battery_msg = messaging.PowerStorageStatusMsg()
-    data_msg = messaging.DataStorageStatusMsg()
-    # SWIG hands back a *copy* of these struct members, so subscribing on the
-    # attribute in place silently does nothing and the gauge reads zero
-    # forever. Subscribe on a local and assign the member back.
-    battery_reader = battery_gauge.batteryStateInMsg
-    battery_reader.subscribeTo(battery_msg)
-    battery_gauge.batteryStateInMsg = battery_reader
-
-    data_reader = data_gauge.dataStorageStateInMsg
-    data_reader.subscribeTo(data_msg)
-    data_gauge.dataStorageStateInMsg = data_reader
-
-    transceiver = vizInterface.Transceiver()
-    transceiver.label = "S-band"
-    transceiver.normalVector = [1.0, 0.0, 0.0]     # +x patch
-    transceiver.r_SB_B = [0.05, 0.0, 0.0]
-    transceiver.fieldOfView = math.radians(100.0)  # patch beamwidth
-    transceiver.transceiverState = 0
-
-    playback = _TelemetryPlayback(telemetry, dt_out, gauges, transceiver,
-                                  battery_msg, data_msg, capacity_j,
-                                  storage_capacity_b)
-    playback.ModelTag = "telemetryPlayback"
-    sim.AddModelToTask(task, playback, 50)
-    return gauges, transceiver, playback
+    ``fieldOfView`` here is edge-to-edge, so each instrument's full-cone FOV is
+    passed straight through: 25.2 deg for LOST, 74 deg for FOUND. Selecting one
+    of these in Vizard's camera dropdown shows exactly what that payload camera
+    sees at that instant.
+    """
+    sensors = cfg.spacecraft.sensors
+    for sensor_key, label in (("lost_camera", "LOST camera (+z)"),
+                              ("found_camera", "FOUND camera (+x)")):
+        sensor = sensors[sensor_key]
+        vizSupport.createStandardCamera(
+            viz,
+            spacecraftName=body_name,
+            setMode=1,                                   # pointing-vector mode
+            pointingVector_B=[float(v) for v in sensor.boresight],
+            fieldOfView=math.radians(float(sensor.fov_full_deg)),
+            displayName=label,
+        )
 
 
 def _add_ground_stations(cfg: MissionConfig, viz, vizSupport) -> None:
     """Drop every Leaf Space site into the scene with its elevation cone."""
+    style = cfg.mission.vizard
     for station in cfg.stations():
         elevation = float(station.minimum_elevation_deg)
         lat = math.radians(float(station.latitude_deg))
@@ -372,24 +302,43 @@ def _add_ground_stations(cfg: MissionConfig, viz, vizSupport) -> None:
             # A station with a 10 deg mask sees everything within 80 deg of its
             # local zenith, i.e. a 160 deg edge-to-edge cone.
             fieldOfView=math.radians(2.0 * (90.0 - elevation)),
-            color=COLOR_STATION,
-            range=4000_000.0,
+            color=[int(c) for c in style.station_idle_color],
+            markerScale=float(style.station_idle_marker_scale),
+            # Draw the cone only as far as a spacecraft could actually be seen,
+            # rather than an arbitrary large radius.
+            range=max_slant_range_m(cfg, elevation),
         )
 
 
-def _add_constraint_cones(cfg, viz, vizSupport, body_name: str) -> None:
-    """Show the pointing constraints as live cones.
+def _add_station_highlighting(cfg, sim, task, viz, vizSupport, env, stride,
+                              dt_out) -> None:
+    """Make stations light up while the spacecraft is above their mask."""
+    style = cfg.mission.vizard
+    access = np.asarray(env.station_access)[:, ::max(1, int(stride))]
+    highlighter = _StationHighlighter(
+        viz, vizSupport, [str(s.name) for s in cfg.stations()], access, dt_out,
+        {
+            "idle_color": [int(c) for c in style.station_idle_color],
+            "active_color": [int(c) for c in style.station_active_color],
+            "idle_scale": float(style.station_idle_marker_scale),
+            "active_scale": float(style.station_active_marker_scale),
+        })
+    highlighter.ModelTag = "stationHighlighter"
+    sim.AddModelToTask(task, highlighter, 50)
 
-    Vizard recolours these when the constraint is violated, which makes the
-    experiment-mode geometry immediately legible: the +z cones must stay clear
-    of both Earth and Sun while the +x cone holds Earth's limb.
+
+def _add_constraint_cones(cfg, viz, vizSupport, body_name: str) -> None:
+    """Show the pointing constraints as cones on the spacecraft body.
+
+    ``incidenceAngle`` is a half-angle measured from the boresight (verified
+    against ``constrainedAttitudeManeuver``, which tests violations as
+    ``dot(boresight, body) >= cos(Fov)`` and is fed the same value as the cone
+    in Basilisk's own example). So the exclusion half-angles go in unchanged,
+    and the FOUND field of view -- quoted as a 74 deg full cone -- goes in
+    halved.
     """
     sensors = cfg.spacecraft.sensors
-    # Cone height is in metres, at Earth scale. A few metres makes the cones
-    # invisible next to a 6378 km planet, so draw them long enough to reach the
-    # limb -- that is what makes "is Earth inside this cone?" legible on screen.
-    altitude = float(cfg.orbit.altitude_km) * 1e3
-    cone_height = 2.5 * altitude
+    cone_height = float(cfg.mission.vizard.cone_height_m)
 
     definitions = [
         # (target body, keep-in?, boresight, half angle deg, label)
@@ -419,12 +368,3 @@ def _add_constraint_cones(cfg, viz, vizSupport, body_name: str) -> None:
             coneHeight=cone_height,
             coneName=label,
         )
-
-
-def decimate(telemetry: dict, stride: int) -> dict:
-    """Subsample telemetry series to match a strided trajectory export."""
-    stride = max(1, int(stride))
-    out = {}
-    for key, value in telemetry.items():
-        out[key] = value[::stride] if isinstance(value, np.ndarray) else value
-    return out
