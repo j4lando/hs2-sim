@@ -248,33 +248,7 @@ def propagate(cfg: MissionConfig) -> EnvironmentResult:
     # Earth is given a 1 mm "orbit" so it sits at the origin; what we actually
     # need from it is J20002Pfix, the inertial-to-Earth-fixed rotation that
     # groundLocation uses to place the stations.
-    ephem = planetEphemeris.PlanetEphemeris()
-    ephem.ModelTag = "planetEphemeris"
-    ephem.setPlanetNames(planetEphemeris.StringVector(["earth", "sun"]))
-
-    earth_oe = planetEphemeris.ClassicElements()
-    earth_oe.a = 1e-3
-    earth_oe.e = 0.0
-    earth_oe.i = 0.0
-    earth_oe.Omega = 0.0
-    earth_oe.omega = 0.0
-    earth_oe.f = 0.0
-
-    sun_elements = sun_orbit_elements(epoch)
-    sun_oe = planetEphemeris.ClassicElements()
-    sun_oe.a = sun_elements["a"]
-    sun_oe.e = sun_elements["e"]
-    sun_oe.i = sun_elements["i"]
-    sun_oe.Omega = sun_elements["Omega"]
-    sun_oe.omega = sun_elements["omega"]
-    sun_oe.f = sun_elements["f"]
-
-    ephem.planetElements = planetEphemeris.classicElementVector([earth_oe, sun_oe])
-    # North pole of the Earth-fixed frame is the J2000 +z axis by construction.
-    ephem.rightAscension = planetEphemeris.DoubleVector([0.0, 0.0])
-    ephem.declination = planetEphemeris.DoubleVector([math.pi / 2, math.pi / 2])
-    ephem.lst0 = planetEphemeris.DoubleVector([gmst_rad(epoch), 0.0])
-    ephem.rotRate = planetEphemeris.DoubleVector([EARTH_ROT_RATE, 0.0])
+    ephem = build_planet_ephemeris(epoch)
     sim.AddModelToTask(task_name, ephem, 100)
 
     earth_msg = ephem.planetOutMsgs[0]
@@ -345,6 +319,49 @@ def propagate(cfg: MissionConfig) -> EnvironmentResult:
         station_names=[str(s.name) for s in stations],
     )
     return result
+
+
+def build_planet_ephemeris(epoch: dt.datetime):
+    """Configure a ``planetEphemeris`` module supplying Earth and the Sun.
+
+    Earth is pinned at the origin (a 1 mm "orbit") but given a correct sidereal
+    rotation, so ground-station geometry and Vizard's Earth orientation are
+    right. The Sun follows its apparent geocentric orbit. Shared by the
+    propagation and the Vizard export so both show the same sky.
+
+    Note the returned module's Earth entry must NOT be wired into a gravity
+    body that is actually integrating: the 1 mm orbit implies an enormous
+    orbital velocity, which is harmless for display but ruins dynamics.
+    """
+    from Basilisk.simulation import planetEphemeris
+
+    ephem = planetEphemeris.PlanetEphemeris()
+    ephem.ModelTag = "planetEphemeris"
+    ephem.setPlanetNames(planetEphemeris.StringVector(["earth", "sun"]))
+
+    earth_oe = planetEphemeris.ClassicElements()
+    earth_oe.a = 1e-3
+    earth_oe.e = 0.0
+    earth_oe.i = 0.0
+    earth_oe.Omega = 0.0
+    earth_oe.omega = 0.0
+    earth_oe.f = 0.0
+
+    elements = sun_orbit_elements(epoch)
+    sun_oe = planetEphemeris.ClassicElements()
+    sun_oe.a = elements["a"]
+    sun_oe.e = elements["e"]
+    sun_oe.i = elements["i"]
+    sun_oe.Omega = elements["Omega"]
+    sun_oe.omega = elements["omega"]
+    sun_oe.f = elements["f"]
+
+    ephem.planetElements = planetEphemeris.classicElementVector([earth_oe, sun_oe])
+    ephem.rightAscension = planetEphemeris.DoubleVector([0.0, 0.0])
+    ephem.declination = planetEphemeris.DoubleVector([math.pi / 2, math.pi / 2])
+    ephem.lst0 = planetEphemeris.DoubleVector([gmst_rad(epoch), 0.0])
+    ephem.rotRate = planetEphemeris.DoubleVector([EARTH_ROT_RATE, 0.0])
+    return ephem
 
 
 def station_positions_inertial(cfg: MissionConfig,

@@ -171,6 +171,7 @@ hs2sim/
   report.py      Markdown report generation
   plots.py       figures
   vizard.py      CONOPS export for 3D playback
+  vizcheck.py    decode and validate a Vizard recording without Vizard
 run_analysis.py  entry point
 docs/VIZARD.md   how to install Vizard and view the CONOPS
 tests/           physics checks that run without Basilisk

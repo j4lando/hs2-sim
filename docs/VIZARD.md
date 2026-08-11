@@ -65,6 +65,29 @@ results/_VizFiles/hs2_conops_<geometry>_UnityViz.bin
 frames. Stride 1 quadruples that; it is smoother but the file grows in
 proportion.
 
+## 3b. Verify the recording without Vizard
+
+If you cannot install Vizard (or just want a fast check that an export is
+sound), the recording can be decoded and validated directly:
+
+```bash
+python -m hs2sim.vizcheck results/_VizFiles/hs2_conops_<geometry>_UnityViz.bin
+```
+
+It decodes the protobuf stream and checks the scene against physics — Earth at
+the origin with the right radius, the Sun about 1 AU away with a declination
+inside the obliquity, the spacecraft in the ISS altitude band at the right
+inclination, a valid MRP attitude, stations on Earth's surface, and the four
+constraint cones at their configured angles. It also reconstructs the body
+frame from each recorded attitude and reports what fraction of frames satisfy
+all four experiment-mode cones, then writes a `*.preview.png` next to the
+`.bin` showing the Earth with its day/night terminator, the orbit, and the body
+axes at an experiment-mode instant.
+
+One gotcha if you parse the file yourself: angles inside it are in **degrees**.
+`vizInterface` multiplies by R2D on the way out because Unity expects degrees,
+even though the Python API takes radians.
+
 ## 4. Open it
 
 Launch Vizard, then either:

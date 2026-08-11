@@ -20,11 +20,13 @@ See ``docs/VIZARD.md`` for how to install Vizard and open the result.
 
 from __future__ import annotations
 
+import datetime as dt
 import math
 import pathlib
 
 import numpy as np
 
+from . import environment
 from .config import MissionConfig
 from .environment import EnvironmentResult
 
@@ -118,11 +120,26 @@ def export(cfg: MissionConfig,
     # the state message is overridden below.
     sc = spacecraft.Spacecraft()
     sc.ModelTag = "HS2"
+    sc.hub.mHub = float(cfg.spacecraft.bus.mass_kg)
     grav_factory = simIncludeGravBody.gravBodyFactory()
     earth = grav_factory.createEarth()
     earth.isCentralBody = True
-    grav_factory.createSun()
+    sun = grav_factory.createSun()
     grav_factory.addBodiesTo(sc)
+
+    # Vizard takes each celestial body's position from that gravity body's
+    # planetBodyInMsg. Leave them unconnected and Earth and the Sun both sit at
+    # the origin -- the Sun ends up inside the Earth, and the lighting is
+    # meaningless. Feed them the same ephemeris the analysis used.
+    #
+    # This is safe here precisely because the spacecraft's own dynamics are
+    # discarded: the Earth entry carries a 1 mm orbit whose implied velocity
+    # would wreck a real propagation, but nothing integrates in this scene.
+    epoch = dt.datetime.fromisoformat(cfg.sim.epoch_utc)
+    ephem = environment.build_planet_ephemeris(epoch)
+    sim.AddModelToTask(task, ephem, 100)
+    earth.planetBodyInMsg.subscribeTo(ephem.planetOutMsgs[0])
+    sun.planetBodyInMsg.subscribeTo(ephem.planetOutMsgs[1])
 
     replay = dataFileToViz.DataFileToViz()
     replay.ModelTag = "conopsReplay"
