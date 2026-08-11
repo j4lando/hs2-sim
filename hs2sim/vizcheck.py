@@ -97,6 +97,14 @@ def check(frames: list) -> tuple[list[tuple[str, bool, str]], dict]:
     cones = [(c.coneName, c.toBodyName, c.isKeepIn, c.incidenceAngle,
               np.array(c.normalVector)) for c in first.settings.keepOutInCones]
 
+    # Telemetry gauges. A gauge that never moves is the classic symptom of an
+    # unsubscribed input message, so check the spread, not just the presence.
+    gauges = {}
+    for k, dev in enumerate(first.spacecraft[0].storageDevices):
+        values = np.array([f.spacecraft[0].storageDevices[k].currentValue
+                           for f in frames if f.spacecraft[0].storageDevices])
+        gauges[dev.label] = (values, dev.maxValue, dev.units)
+
     altitude = np.linalg.norm(sc_r, axis=1) - R_EARTH
     h = np.cross(sc_r, sc_v)
     h /= np.linalg.norm(h, axis=1, keepdims=True)
@@ -143,6 +151,16 @@ def check(frames: list) -> tuple[list[tuple[str, bool, str]], dict]:
         ("Station boresights point at local zenith",
          boresight_error.size > 0 and boresight_error.max() < 1.0,
          f"max deviation {boresight_error.max():.2f} deg from local vertical"),
+        ("Telemetry gauges present",
+         len(gauges) >= 4,
+         ", ".join(label.split(":")[0].split("(")[0].strip()
+                   for label in gauges) or "none"),
+        ("Every gauge varies over time",
+         bool(gauges) and all(len(np.unique(np.round(v, 6))) > 1
+                              for v, _, _ in gauges.values()),
+         "; ".join(f"{lab.split(':')[0].split('(')[0].strip()} "
+                   f"{v.min():.3g}-{v.max():.3g} of {m:.3g}"
+                   for lab, (v, m, _) in gauges.items())),
         ("Constraint cones attached",
          len(cones) == 4,
          f"{len(cones)} cones"),
@@ -152,7 +170,8 @@ def check(frames: list) -> tuple[list[tuple[str, bool, str]], dict]:
     ]
 
     data = {"sc_r": sc_r, "sc_v": sc_v, "sc_sigma": sc_sigma, "sun": sun,
-            "stations": stations, "cones": cones, "bodies": bodies}
+            "stations": stations, "cones": cones, "bodies": bodies,
+            "gauges": gauges}
 
     # End-to-end check: do the attitudes actually written into the file satisfy
     # the experiment-mode constraints, and for what fraction of the run? Only

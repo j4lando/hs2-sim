@@ -107,6 +107,38 @@ Useful things once it is running:
 | Show ground stations | `View → Locations` |
 | Speed up / slow down | the playback rate box, bottom right |
 
+At high playback rates (the default can exceed 1000×) a 93-minute orbit goes by
+in a few seconds and every mode change blurs together, which makes the attitude
+look static. Drop to ~60× to actually see the vehicle slew between
+sun-pointing, limb-staring and ground-station tracking.
+
+**A straight line through the spacecraft?** That is a Vizard HUD element, not
+something in the recording — the export contains no point-lines, no target
+lines and no scripted cameras. It is almost certainly the boresight line of the
+**Standard Camera** panel (the inset window titled "Standard Camera 1"). Close
+that panel, or toggle the camera boresight HUD, and it disappears.
+
+## 4b. Telemetry gauges
+
+The export drives Vizard's generic storage panel with the CONOPS telemetry, so
+you can watch the state of the spacecraft alongside its motion. Open it with
+the spacecraft's instrument panel (it is enabled by default in the export):
+
+| Gauge | Shows | Colour |
+| --- | --- | --- |
+| Battery | Stored energy against the 75.6 Wh pack | red below the depth-of-discharge floor, amber near it, green above |
+| Payload storage | Image data held on board against 128 GB | blue, amber above 70 %, red above 90 % |
+| Temperature | Bulk single-node temperature, drawn as degrees above the −40 °C electronics limit | blue when below the battery cold limit, green in band, red above the battery hot limit |
+| Mode | safe / standby / slew / experiment / downlink | grey, blue, amber, green, magenta in that order |
+
+There is also an **S-band transceiver** HUD on the +x face: it animates as
+*sending* during downlink passes and *receiving* otherwise.
+
+Two notes on reading them. Temperature is offset because Vizard's bars start at
+zero and the spacecraft goes below 0 °C — the label states the offset. Payload
+storage is the data held inside the 24-hour retention window, not a running
+total, so it plateaus rather than climbing forever.
+
 ## 5. What you are looking at
 
 Four cones are attached to the spacecraft body, matching the constraints the
@@ -119,12 +151,20 @@ attitude solver enforces:
 | FOUND Sun keep-out | +x | 70° | Sun must stay **outside** |
 | FOUND field of view | +x | 37° | Earth must stay **inside** |
 
-Vizard recolours a cone when its condition is violated, which makes this the
-quickest way to check the solver is doing what it claims. During experiment
-mode you should see the +x cone locked onto Earth's limb while both +z cones
-stay clear of Earth and Sun — and you should see the vehicle spend real time
-slewing between that attitude, sun-pointing, and ground-station tracking,
-because with magnetorquers alone a 90° slew takes about six minutes.
+**How a cone signals a violation.** Vizard does *not* change the cone's
+colour. Per the Vizard GUI documentation: if the in/out condition is not
+triggered the cone is drawn **opaque** (translucent); when it *is* triggered
+the cone becomes **solid**. It is a subtle change and easy to miss with the
+station cones also on screen — turn the ground-station cones off under
+`Edit Location` if you want to watch it clearly.
+
+**These cones are drawn all the time, but the constraints only apply in
+experiment mode.** The payload is off in standby and downlink, so the LOST
+cone sweeping across Earth then is expected and is not a violation. Use the
+**Mode** gauge to tell which mode is active before judging a cone. Over a
+3-day run the vehicle is roughly 43 % limb-staring, 54 % sun-pointing and 5 %
+slewing, so most of the time you are watching a mode where those cones simply
+do not apply.
 
 The yellow markers on Earth are the Leaf Space sites, each drawn with the cone
 its 10° elevation mask sweeps — a 160° edge-to-edge cone about that site's own
