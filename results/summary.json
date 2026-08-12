@@ -19498,6 +19498,825 @@
       ]
     }
   },
+  "exclusion_sweep": {
+    "lost_deg": [
+      20.0,
+      30.0,
+      40.0,
+      50.0,
+      60.0
+    ],
+    "found_deg": [
+      50.0,
+      60.0,
+      70.0,
+      80.0,
+      90.0
+    ],
+    "n_grid": 32,
+    "payload_rate_hz": 0.2,
+    "points": [
+      {
+        "lost_deg": 20.0,
+        "found_deg": 50.0,
+        "feasible_fraction": 0.5346540383094462,
+        "images_per_day_ceiling": 18477.643563974463,
+        "reject_reasons": {
+          "no_sunlit_limb": 0.41719874230821163,
+          "sun_in_found_fov": 0.04814721938234216,
+          "no_legal_roll": 0.0
+        },
+        "images_per_day": 5995.217684844041,
+        "experiments_per_day": 2997.6088424220206,
+        "frac_experiment": 0.17347273393645957,
+        "frac_standby": 0.33332690341621496,
+        "frac_slew": 0.4929495958797091,
+        "frac_downlink": 0.0002507667676163654,
+        "slews_per_day": 66.9987075866592,
+        "energy_margin_w": 0.7530678617490164,
+        "min_soc": 0.8824825961204108,
+        "battery_limited": false
+      },
+      {
+        "lost_deg": 20.0,
+        "found_deg": 60.0,
+        "feasible_fraction": 0.5149399124245289,
+        "images_per_day_ceiling": 17796.32337339172,
+        "reject_reasons": {
+          "no_sunlit_limb": 0.41719874230821163,
+          "sun_in_found_fov": 0.06786134526725951,
+          "no_legal_roll": 0.0
+        },
+        "images_per_day": 5660.557473814161,
+        "experiments_per_day": 2830.2787369070807,
+        "frac_experiment": 0.16378927875619684,
+        "frac_standby": 0.3427210123261511,
+        "frac_slew": 0.4932582319013908,
+        "frac_downlink": 0.00023147701626126038,
+        "slews_per_day": 68.33201520032405,
+        "energy_margin_w": 0.866602783610941,
+        "min_soc": 0.8850986821149497,
+        "battery_limited": false
+      },
+      {
+        "lost_deg": 20.0,
+        "found_deg": 70.0,
+        "feasible_fraction": 0.49402982195559497,
+        "images_per_day_ceiling": 17073.670646785362,
+        "reject_reasons": {
+          "no_sunlit_limb": 0.41719874230821163,
+          "sun_in_found_fov": 0.08877143573619337,
+          "no_legal_roll": 0.0
+        },
+        "images_per_day": 5613.891707335892,
+        "experiments_per_day": 2806.945853667946,
+        "frac_experiment": 0.16243899616133947,
+        "frac_standby": 0.37072973129376363,
+        "frac_slew": 0.4665419262745703,
+        "frac_downlink": 0.0002893462703265755,
+        "slews_per_day": 66.66538068324299,
+        "energy_margin_w": 1.102837225264523,
+        "min_soc": 0.887174230673773,
+        "battery_limited": false
+      },
+      {
+        "lost_deg": 20.0,
+        "found_deg": 80.0,
+        "feasible_fraction": 0.490904882236068,
+        "images_per_day_ceiling": 16965.67273007851,
+        "reject_reasons": {
+          "no_sunlit_limb": 0.41719874230821163,
+          "sun_in_found_fov": 0.09189637545572038,
+          "no_legal_roll": 0.0
+        },
+        "images_per_day": 5617.891630176886,
+        "experiments_per_day": 2808.945815088443,
+        "frac_experiment": 0.1625547346694701,
+        "frac_standby": 0.37391254026735593,
+        "frac_slew": 0.4632433787928474,
+        "frac_downlink": 0.0002893462703265755,
+        "slews_per_day": 66.9987075866592,
+        "energy_margin_w": 1.0782560306445015,
+        "min_soc": 0.8873310501238216,
+        "battery_limited": false
+      },
+      {
+        "lost_deg": 20.0,
+        "found_deg": 90.0,
+        "feasible_fraction": 0.47053490480507704,
+        "images_per_day_ceiling": 16261.686310063464,
+        "reject_reasons": {
+          "no_sunlit_limb": 0.41719874230821163,
+          "sun_in_found_fov": 0.11226635288671129,
+          "no_legal_roll": 0.0
+        },
+        "images_per_day": 5375.229644489882,
+        "experiments_per_day": 2687.614822244941,
+        "frac_experiment": 0.15553326517621188,
+        "frac_standby": 0.41343724079396615,
+        "frac_slew": 0.4307401477594954,
+        "frac_downlink": 0.0002893462703265755,
+        "slews_per_day": 66.9987075866592,
+        "energy_margin_w": 1.4273095355120038,
+        "min_soc": 0.8886712335652052,
+        "battery_limited": false
+      },
+      {
+        "lost_deg": 30.0,
+        "found_deg": 50.0,
+        "feasible_fraction": 0.5346540383094462,
+        "images_per_day_ceiling": 18477.643563974463,
+        "reject_reasons": {
+          "no_sunlit_limb": 0.41719874230821163,
+          "sun_in_found_fov": 0.04814721938234216,
+          "no_legal_roll": 0.0
+        },
+        "images_per_day": 5769.88869813468,
+        "experiments_per_day": 2884.94434906734,
+        "frac_experiment": 0.16695279797843407,
+        "frac_standby": 0.3330761366485986,
+        "frac_slew": 0.49968171910264075,
+        "frac_downlink": 0.0002893462703265755,
+        "slews_per_day": 74.33189946181592,
+        "energy_margin_w": 0.694687364657761,
+        "min_soc": 0.882149683090836,
+        "battery_limited": false
+      },
+      {
+        "lost_deg": 30.0,
+        "found_deg": 60.0,
+        "feasible_fraction": 0.5149399124245289,
+        "images_per_day_ceiling": 17796.32337339172,
+        "reject_reasons": {
+          "no_sunlit_limb": 0.41719874230821163,
+          "sun_in_found_fov": 0.06786134526725951,
+          "no_legal_roll": 0.0
+        },
+        "images_per_day": 5545.893019038984,
+        "experiments_per_day": 2772.946509519492,
+        "frac_experiment": 0.16047144152311876,
+        "frac_standby": 0.3556258559827164,
+        "frac_slew": 0.4836133562238383,
+        "frac_downlink": 0.0002893462703265755,
+        "slews_per_day": 72.33193804131864,
+        "energy_margin_w": 0.9374677860730938,
+        "min_soc": 0.8847640359421441,
+        "battery_limited": false
+      },
+      {
+        "lost_deg": 30.0,
+        "found_deg": 70.0,
+        "feasible_fraction": 0.49402982195559497,
+        "images_per_day_ceiling": 17073.670646785362,
+        "reject_reasons": {
+          "no_sunlit_limb": 0.41719874230821163,
+          "sun_in_found_fov": 0.08877143573619337,
+          "no_legal_roll": 0.0
+        },
+        "images_per_day": 5541.2264423911565,
+        "experiments_per_day": 2770.6132211955783,
+        "frac_experiment": 0.16033641326363304,
+        "frac_standby": 0.4044675064138423,
+        "frac_slew": 0.43484886479813273,
+        "frac_downlink": 0.0003472155243918906,
+        "slews_per_day": 72.66526494473484,
+        "energy_margin_w": 1.2582542373075838,
+        "min_soc": 0.8868924369435071,
+        "battery_limited": false
+      },
+      {
+        "lost_deg": 30.0,
+        "found_deg": 80.0,
+        "feasible_fraction": 0.490904882236068,
+        "images_per_day_ceiling": 16965.67273007851,
+        "reject_reasons": {
+          "no_sunlit_limb": 0.41719874230821163,
+          "sun_in_found_fov": 0.09189637545572038,
+          "no_legal_roll": 0.0
+        },
+        "images_per_day": 5305.230994772476,
+        "experiments_per_day": 2652.615497386238,
+        "frac_experiment": 0.15350784128392586,
+        "frac_standby": 0.391369765243726,
+        "frac_slew": 0.45477517794795624,
+        "frac_downlink": 0.0003472155243918906,
+        "slews_per_day": 72.33193804131864,
+        "energy_margin_w": 1.197935679489662,
+        "min_soc": 0.887048359636684,
+        "battery_limited": false
+      },
+      {
+        "lost_deg": 30.0,
+        "found_deg": 90.0,
+        "feasible_fraction": 0.47053490480507704,
+        "images_per_day_ceiling": 16261.686310063464,
+        "reject_reasons": {
+          "no_sunlit_limb": 0.41719874230821163,
+          "sun_in_found_fov": 0.11226635288671129,
+          "no_legal_roll": 0.0
+        },
+        "images_per_day": 5070.568854767461,
+        "experiments_per_day": 2535.2844273837304,
+        "frac_experiment": 0.14671784880692887,
+        "frac_standby": 0.413958064080554,
+        "frac_slew": 0.43899616133948033,
+        "frac_downlink": 0.00032792577303678553,
+        "slews_per_day": 78.33182230281051,
+        "energy_margin_w": 1.3552939428830997,
+        "min_soc": 0.8884762659074162,
+        "battery_limited": false
+      },
+      {
+        "lost_deg": 40.0,
+        "found_deg": 50.0,
+        "feasible_fraction": 0.5346540383094462,
+        "images_per_day_ceiling": 18477.643563974463,
+        "reject_reasons": {
+          "no_sunlit_limb": 0.41719874230821163,
+          "sun_in_found_fov": 0.04814721938234216,
+          "no_legal_roll": 0.0
+        },
+        "images_per_day": 5957.885071661425,
+        "experiments_per_day": 2978.9425358307126,
+        "frac_experiment": 0.17239250786057367,
+        "frac_standby": 0.33215022858355353,
+        "frac_slew": 0.4951679172855462,
+        "frac_downlink": 0.0002893462703265755,
+        "slews_per_day": 82.99839895063751,
+        "energy_margin_w": 0.6305837038109127,
+        "min_soc": 0.8820024898029339,
+        "battery_limited": false
+      },
+      {
+        "lost_deg": 40.0,
+        "found_deg": 60.0,
+        "feasible_fraction": 0.5149399124245289,
+        "images_per_day_ceiling": 17796.32337339172,
+        "reject_reasons": {
+          "no_sunlit_limb": 0.41719874230821163,
+          "sun_in_found_fov": 0.06786134526725951,
+          "no_legal_roll": 0.0
+        },
+        "images_per_day": 5744.555853475048,
+        "experiments_per_day": 2872.277926737524,
+        "frac_experiment": 0.16621978742694007,
+        "frac_standby": 0.35508574294477346,
+        "frac_slew": 0.4784051233579599,
+        "frac_downlink": 0.0002893462703265755,
+        "slews_per_day": 80.66511062672402,
+        "energy_margin_w": 0.8721699815044534,
+        "min_soc": 0.8846168426542421,
+        "battery_limited": false
+      },
+      {
+        "lost_deg": 40.0,
+        "found_deg": 70.0,
+        "feasible_fraction": 0.49402982195559497,
+        "images_per_day_ceiling": 17073.670646785362,
+        "reject_reasons": {
+          "no_sunlit_limb": 0.41719874230821163,
+          "sun_in_found_fov": 0.08877143573619337,
+          "no_legal_roll": 0.0
+        },
+        "images_per_day": 5638.557898188691,
+        "experiments_per_day": 2819.2789490943455,
+        "frac_experiment": 0.16315271696147837,
+        "frac_standby": 0.38724175845373354,
+        "frac_slew": 0.4492583090603962,
+        "frac_downlink": 0.0003472155243918906,
+        "slews_per_day": 87.3316486950483,
+        "energy_margin_w": 1.1315238919322534,
+        "min_soc": 0.886745243655605,
+        "battery_limited": false
+      },
+      {
+        "lost_deg": 40.0,
+        "found_deg": 80.0,
+        "feasible_fraction": 0.490904882236068,
+        "images_per_day_ceiling": 16965.67273007851,
+        "reject_reasons": {
+          "no_sunlit_limb": 0.41719874230821163,
+          "sun_in_found_fov": 0.09189637545572038,
+          "no_legal_roll": 0.0
+        },
+        "images_per_day": 5549.226288073146,
+        "experiments_per_day": 2774.613144036573,
+        "frac_experiment": 0.1605678902798943,
+        "frac_standby": 0.39038598792461565,
+        "frac_slew": 0.44869890627109815,
+        "frac_downlink": 0.0003472155243918906,
+        "slews_per_day": 85.66501417796724,
+        "energy_margin_w": 1.1258920872911196,
+        "min_soc": 0.886901166348782,
+        "battery_limited": false
+      },
+      {
+        "lost_deg": 40.0,
+        "found_deg": 90.0,
+        "feasible_fraction": 0.47053490480507704,
+        "images_per_day_ceiling": 16261.686310063464,
+        "reject_reasons": {
+          "no_sunlit_limb": 0.41719874230821163,
+          "sun_in_found_fov": 0.11226635288671129,
+          "no_legal_roll": 0.0
+        },
+        "images_per_day": 5494.560675912887,
+        "experiments_per_day": 2747.2803379564434,
+        "frac_experiment": 0.15898613066877568,
+        "frac_standby": 0.4181246503732567,
+        "frac_slew": 0.42254200343357573,
+        "frac_downlink": 0.0003472155243918906,
+        "slews_per_day": 86.33166798479967,
+        "energy_margin_w": 1.326006260473783,
+        "min_soc": 0.8883290726195142,
+        "battery_limited": false
+      },
+      {
+        "lost_deg": 50.0,
+        "found_deg": 50.0,
+        "feasible_fraction": 0.5346540383094462,
+        "images_per_day_ceiling": 18477.643563974463,
+        "reject_reasons": {
+          "no_sunlit_limb": 0.41719874230821163,
+          "sun_in_found_fov": 0.04814721938234216,
+          "no_legal_roll": 0.0
+        },
+        "images_per_day": 6200.54705734843,
+        "experiments_per_day": 3100.273528674215,
+        "frac_experiment": 0.1794139773538319,
+        "frac_standby": 0.3468683088674987,
+        "frac_slew": 0.47354410601647345,
+        "frac_downlink": 0.0001736077621959453,
+        "slews_per_day": 100.3313979282807,
+        "energy_margin_w": 0.6292854154492441,
+        "min_soc": 0.8815649923900232,
+        "battery_limited": false
+      },
+      {
+        "lost_deg": 50.0,
+        "found_deg": 60.0,
+        "feasible_fraction": 0.5149399124245289,
+        "images_per_day_ceiling": 17796.32337339172,
+        "reject_reasons": {
+          "no_sunlit_limb": 0.41719874230821163,
+          "sun_in_found_fov": 0.06786134526725951,
+          "no_legal_roll": 0.0
+        },
+        "images_per_day": 5774.555274782507,
+        "experiments_per_day": 2887.2776373912534,
+        "frac_experiment": 0.1670878262379198,
+        "frac_standby": 0.3549892941879979,
+        "frac_slew": 0.47774927181188637,
+        "frac_downlink": 0.0001736077621959453,
+        "slews_per_day": 99.66474412144825,
+        "energy_margin_w": 0.7831894313423711,
+        "min_soc": 0.8841793452413312,
+        "battery_limited": false
+      },
+      {
+        "lost_deg": 50.0,
+        "found_deg": 70.0,
+        "feasible_fraction": 0.49402982195559497,
+        "images_per_day_ceiling": 17073.670646785362,
+        "reject_reasons": {
+          "no_sunlit_limb": 0.41719874230821163,
+          "sun_in_found_fov": 0.08877143573619337,
+          "no_legal_roll": 0.0
+        },
+        "images_per_day": 5253.898651646379,
+        "experiments_per_day": 2626.9493258231896,
+        "frac_experiment": 0.15202253042958278,
+        "frac_standby": 0.3813390945390714,
+        "frac_slew": 0.46634902876101925,
+        "frac_downlink": 0.0002893462703265755,
+        "slews_per_day": 101.99803244536176,
+        "energy_margin_w": 0.9861794975622532,
+        "min_soc": 0.8863077462426943,
+        "battery_limited": false
+      },
+      {
+        "lost_deg": 50.0,
+        "found_deg": 80.0,
+        "feasible_fraction": 0.490904882236068,
+        "images_per_day_ceiling": 16965.67273007851,
+        "reject_reasons": {
+          "no_sunlit_limb": 0.41719874230821163,
+          "sun_in_found_fov": 0.09189637545572038,
+          "no_legal_roll": 0.0
+        },
+        "images_per_day": 5180.566732894812,
+        "experiments_per_day": 2590.283366447406,
+        "frac_experiment": 0.1499006577805212,
+        "frac_standby": 0.39032811867055034,
+        "frac_slew": 0.4594818772786019,
+        "frac_downlink": 0.0002893462703265755,
+        "slews_per_day": 103.99799386585906,
+        "energy_margin_w": 0.9746040423216232,
+        "min_soc": 0.8864636689358711,
+        "battery_limited": false
+      },
+      {
+        "lost_deg": 50.0,
+        "found_deg": 90.0,
+        "feasible_fraction": 0.47053490480507704,
+        "images_per_day_ceiling": 16261.686310063464,
+        "reject_reasons": {
+          "no_sunlit_limb": 0.41719874230821163,
+          "sun_in_found_fov": 0.11226635288671129,
+          "no_legal_roll": 0.0
+        },
+        "images_per_day": 4975.237360390423,
+        "experiments_per_day": 2487.6186801952117,
+        "frac_experiment": 0.14395941436314885,
+        "frac_standby": 0.41459462587527246,
+        "frac_slew": 0.4411759032426072,
+        "frac_downlink": 0.00027005651897147047,
+        "slews_per_day": 100.3313979282807,
+        "energy_margin_w": 1.1408817183117481,
+        "min_soc": 0.8878915752066034,
+        "battery_limited": false
+      },
+      {
+        "lost_deg": 60.0,
+        "found_deg": 50.0,
+        "feasible_fraction": 0.4948592812638645,
+        "images_per_day_ceiling": 17102.33676047916,
+        "reject_reasons": {
+          "no_sunlit_limb": 0.41719874230821163,
+          "sun_in_found_fov": 0.04814721938234216,
+          "no_legal_roll": 0.039794757045581684
+        },
+        "images_per_day": 5061.235701471807,
+        "experiments_per_day": 2530.6178507359036,
+        "frac_experiment": 0.1464477922879574,
+        "frac_standby": 0.3353716170598561,
+        "frac_slew": 0.5180455623927007,
+        "frac_downlink": 0.00013502825948573524,
+        "slews_per_day": 91.33157153604289,
+        "energy_margin_w": 0.5857126247021259,
+        "min_soc": 0.8850260833178124,
+        "battery_limited": false
+      },
+      {
+        "lost_deg": 60.0,
+        "found_deg": 60.0,
+        "feasible_fraction": 0.4751451553789472,
+        "images_per_day_ceiling": 16421.016569896416,
+        "reject_reasons": {
+          "no_sunlit_limb": 0.41719874230821163,
+          "sun_in_found_fov": 0.06786134526725951,
+          "no_legal_roll": 0.039794757045581684
+        },
+        "images_per_day": 4827.240215273624,
+        "experiments_per_day": 2413.620107636812,
+        "frac_experiment": 0.13967708956231553,
+        "frac_standby": 0.3570340078316391,
+        "frac_slew": 0.5031538743465597,
+        "frac_downlink": 0.00013502825948573524,
+        "slews_per_day": 91.33157153604289,
+        "energy_margin_w": 0.7928033723845437,
+        "min_soc": 0.8876404361691206,
+        "battery_limited": false
+      },
+      {
+        "lost_deg": 60.0,
+        "found_deg": 70.0,
+        "feasible_fraction": 0.4542350649100133,
+        "images_per_day_ceiling": 15698.36384329006,
+        "reject_reasons": {
+          "no_sunlit_limb": 0.41719874230821163,
+          "sun_in_found_fov": 0.08877143573619337,
+          "no_legal_roll": 0.039794757045581684
+        },
+        "images_per_day": 4523.912733164869,
+        "experiments_per_day": 2261.9563665824344,
+        "frac_experiment": 0.13090025269574276,
+        "frac_standby": 0.386952412183407,
+        "frac_slew": 0.48187727860187884,
+        "frac_downlink": 0.00027005651897147047,
+        "slews_per_day": 93.33153295654017,
+        "energy_margin_w": 1.0267569427674268,
+        "min_soc": 0.8897688371704836,
+        "battery_limited": false
+      },
+      {
+        "lost_deg": 60.0,
+        "found_deg": 80.0,
+        "feasible_fraction": 0.4511101251904863,
+        "images_per_day_ceiling": 15590.365926583208,
+        "reject_reasons": {
+          "no_sunlit_limb": 0.41719874230821163,
+          "sun_in_found_fov": 0.09189637545572038,
+          "no_legal_roll": 0.039794757045581684
+        },
+        "images_per_day": 4289.9172469666855,
+        "experiments_per_day": 2144.9586234833428,
+        "frac_experiment": 0.12412954997010088,
+        "frac_standby": 0.3905788854381667,
+        "frac_slew": 0.48502150807276095,
+        "frac_downlink": 0.00027005651897147047,
+        "slews_per_day": 91.6648984394591,
+        "energy_margin_w": 1.0311675400944171,
+        "min_soc": 0.8899247598636605,
+        "battery_limited": false
+      },
+      {
+        "lost_deg": 60.0,
+        "found_deg": 90.0,
+        "feasible_fraction": 0.4307401477594954,
+        "images_per_day_ceiling": 14886.37950656816,
+        "reject_reasons": {
+          "no_sunlit_limb": 0.41719874230821163,
+          "sun_in_found_fov": 0.11226635288671129,
+          "no_legal_roll": 0.039794757045581684
+        },
+        "images_per_day": 4512.579618448717,
+        "experiments_per_day": 2256.2898092243586,
+        "frac_experiment": 0.13057232692270596,
+        "frac_standby": 0.4291776778997319,
+        "frac_slew": 0.4399799386585907,
+        "frac_downlink": 0.00027005651897147047,
+        "slews_per_day": 94.33151366678882,
+        "energy_margin_w": 1.3657401603087969,
+        "min_soc": 0.8913526661343928,
+        "battery_limited": false
+      }
+    ],
+    "matrices": {
+      "feasible_fraction": [
+        [
+          0.5346540383094462,
+          0.5149399124245289,
+          0.49402982195559497,
+          0.490904882236068,
+          0.47053490480507704
+        ],
+        [
+          0.5346540383094462,
+          0.5149399124245289,
+          0.49402982195559497,
+          0.490904882236068,
+          0.47053490480507704
+        ],
+        [
+          0.5346540383094462,
+          0.5149399124245289,
+          0.49402982195559497,
+          0.490904882236068,
+          0.47053490480507704
+        ],
+        [
+          0.5346540383094462,
+          0.5149399124245289,
+          0.49402982195559497,
+          0.490904882236068,
+          0.47053490480507704
+        ],
+        [
+          0.4948592812638645,
+          0.4751451553789472,
+          0.4542350649100133,
+          0.4511101251904863,
+          0.4307401477594954
+        ]
+      ],
+      "images_per_day_ceiling": [
+        [
+          18477.643563974463,
+          17796.32337339172,
+          17073.670646785362,
+          16965.67273007851,
+          16261.686310063464
+        ],
+        [
+          18477.643563974463,
+          17796.32337339172,
+          17073.670646785362,
+          16965.67273007851,
+          16261.686310063464
+        ],
+        [
+          18477.643563974463,
+          17796.32337339172,
+          17073.670646785362,
+          16965.67273007851,
+          16261.686310063464
+        ],
+        [
+          18477.643563974463,
+          17796.32337339172,
+          17073.670646785362,
+          16965.67273007851,
+          16261.686310063464
+        ],
+        [
+          17102.33676047916,
+          16421.016569896416,
+          15698.36384329006,
+          15590.365926583208,
+          14886.37950656816
+        ]
+      ],
+      "images_per_day": [
+        [
+          5995.217684844041,
+          5660.557473814161,
+          5613.891707335892,
+          5617.891630176886,
+          5375.229644489882
+        ],
+        [
+          5769.88869813468,
+          5545.893019038984,
+          5541.2264423911565,
+          5305.230994772476,
+          5070.568854767461
+        ],
+        [
+          5957.885071661425,
+          5744.555853475048,
+          5638.557898188691,
+          5549.226288073146,
+          5494.560675912887
+        ],
+        [
+          6200.54705734843,
+          5774.555274782507,
+          5253.898651646379,
+          5180.566732894812,
+          4975.237360390423
+        ],
+        [
+          5061.235701471807,
+          4827.240215273624,
+          4523.912733164869,
+          4289.9172469666855,
+          4512.579618448717
+        ]
+      ],
+      "frac_experiment": [
+        [
+          0.17347273393645957,
+          0.16378927875619684,
+          0.16243899616133947,
+          0.1625547346694701,
+          0.15553326517621188
+        ],
+        [
+          0.16695279797843407,
+          0.16047144152311876,
+          0.16033641326363304,
+          0.15350784128392586,
+          0.14671784880692887
+        ],
+        [
+          0.17239250786057367,
+          0.16621978742694007,
+          0.16315271696147837,
+          0.1605678902798943,
+          0.15898613066877568
+        ],
+        [
+          0.1794139773538319,
+          0.1670878262379198,
+          0.15202253042958278,
+          0.1499006577805212,
+          0.14395941436314885
+        ],
+        [
+          0.1464477922879574,
+          0.13967708956231553,
+          0.13090025269574276,
+          0.12412954997010088,
+          0.13057232692270596
+        ]
+      ],
+      "energy_margin_w": [
+        [
+          0.7530678617490164,
+          0.866602783610941,
+          1.102837225264523,
+          1.0782560306445015,
+          1.4273095355120038
+        ],
+        [
+          0.694687364657761,
+          0.9374677860730938,
+          1.2582542373075838,
+          1.197935679489662,
+          1.3552939428830997
+        ],
+        [
+          0.6305837038109127,
+          0.8721699815044534,
+          1.1315238919322534,
+          1.1258920872911196,
+          1.326006260473783
+        ],
+        [
+          0.6292854154492441,
+          0.7831894313423711,
+          0.9861794975622532,
+          0.9746040423216232,
+          1.1408817183117481
+        ],
+        [
+          0.5857126247021259,
+          0.7928033723845437,
+          1.0267569427674268,
+          1.0311675400944171,
+          1.3657401603087969
+        ]
+      ],
+      "slews_per_day": [
+        [
+          66.9987075866592,
+          68.33201520032405,
+          66.66538068324299,
+          66.9987075866592,
+          66.9987075866592
+        ],
+        [
+          74.33189946181592,
+          72.33193804131864,
+          72.66526494473484,
+          72.33193804131864,
+          78.33182230281051
+        ],
+        [
+          82.99839895063751,
+          80.66511062672402,
+          87.3316486950483,
+          85.66501417796724,
+          86.33166798479967
+        ],
+        [
+          100.3313979282807,
+          99.66474412144825,
+          101.99803244536176,
+          103.99799386585906,
+          100.3313979282807
+        ],
+        [
+          91.33157153604289,
+          91.33157153604289,
+          93.33153295654017,
+          91.6648984394591,
+          94.33151366678882
+        ]
+      ]
+    },
+    "runtime_s": 614.489764213562,
+    "reference_geometry": "C_2panel_135_plus_body",
+    "baseline": {
+      "lost_deg": 40.0,
+      "found_deg": 70.0,
+      "headline_feasible_fraction": 0.5006654964217512,
+      "headline_images_per_day": 5297.89780289732,
+      "headline_search_resolution": 48,
+      "baseline_images_per_day": 5638.557898188691,
+      "baseline_images_per_day_ceiling": 17073.670646785362,
+      "baseline_feasible_fraction": 0.49402982195559497,
+      "d_images_per_deg_lost_looser": -0.0,
+      "d_images_per_deg_lost_tighter": 0.0,
+      "d_images_per_deg_found_looser": -72.26527266063567,
+      "d_images_per_deg_found_tighter": -10.799791670685227
+    },
+    "character": {
+      "scheduler_noise_images_per_day": 577.3221967168838,
+      "scheduler_noise_relative": 0.10648239228801881,
+      "found_feasibility_pp_per_deg": 0.160297833760923,
+      "found_steps": [
+        {
+          "from_deg": 50.0,
+          "to_deg": 60.0,
+          "pp_per_deg": 0.19714125884917377
+        },
+        {
+          "from_deg": 60.0,
+          "to_deg": 70.0,
+          "pp_per_deg": 0.20910090468933884
+        },
+        {
+          "from_deg": 70.0,
+          "to_deg": 80.0,
+          "pp_per_deg": 0.031249397195269868
+        },
+        {
+          "from_deg": 80.0,
+          "to_deg": 90.0,
+          "pp_per_deg": 0.20369977430990946
+        }
+      ],
+      "found_step_min_pp_per_deg": 0.031249397195269868,
+      "found_step_max_pp_per_deg": 0.20910090468933884,
+      "found_monotone": true,
+      "found_feasible_span_pp": 10.391389054995088,
+      "lost_free_band_deg": 50.0,
+      "lost_binds_above_deg": 60.0,
+      "lost_feasible_span_pp": 3.9794757045581717
+    }
+  },
   "data_budget": {
     "downlink_capacity_bytes_per_day": 1031975926.3903086,
     "max_experiments_per_day_downlink_limited": 6216918.827713165,
@@ -19651,6 +20470,5 @@
         "downlink": 21.67
       }
     }
-  },
-  "vizard_file": "/home/user/hs2-sim/results/_VizFiles/hs2_conops_C_2panel_135_plus_body_UnityViz.bin"
+  }
 }

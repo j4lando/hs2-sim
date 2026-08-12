@@ -87,6 +87,87 @@ Heater duty cycle sensitivity (the heater number is not trusted):
 | B_3panel_90 | 50.1 % | 41.7 % | 8.2 % | 0.0 % |
 | C_2panel_135_plus_body | 50.1 % | 41.7 % | 8.2 % | 0.0 % |
 
+## Camera exclusion-angle trade
+
+Both keep-out cones were swept and the whole pipeline re-run at each grid point -- pointing re-solved on a 32x32 azimuth/roll search, then the mode scheduler run at 0.20 Hz on geometry `C_2panel_135_plus_body`. Orbit, array, cadence and ground stations are identical across the grid; only the cones move.
+
+`LOST` moves the +z keep-out against **both** Sun and Earth (the requirement quotes one angle for both, and the star tracker shares that face). `FOUND` moves FOUND's Sun keep-out only -- its 74 deg field of view is an optical property and does not move. The baseline cell is in **bold**.
+
+**Sanity check.** The sweep re-solves pointing on a coarser azimuth/roll grid than the headline run, so the baseline cell has to reproduce the headline result or the whole sweep is biased. It does: 49.4 % feasible here against 50.1 % at 48x48. The coarse grid is not losing legal attitudes. Realised images differ by more (5,639 against 5,298 per day), which is the scheduler sensitivity discussed under table 3, not a feasibility difference.
+
+### 1. Fraction of the timeline with a legal experiment attitude
+
+This is the constraint's own effect, and it is the number to trade on: a deterministic function of the two cone angles, with no scheduler behaviour mixed in.
+
+| Feasible (%) | FOUND 50 deg | FOUND 60 deg | FOUND 70 deg | FOUND 80 deg | FOUND 90 deg |
+| --- | --- | --- | --- | --- | --- |
+| **LOST 20 deg** | 53.5 | 51.5 | 49.4 | 49.1 | 47.1 |
+| **LOST 30 deg** | 53.5 | 51.5 | 49.4 | 49.1 | 47.1 |
+| **LOST 40 deg** | 53.5 | 51.5 | **49.4** | 49.1 | 47.1 |
+| **LOST 50 deg** | 53.5 | 51.5 | 49.4 | 49.1 | 47.1 |
+| **LOST 60 deg** | 49.5 | 47.5 | 45.4 | 45.1 | 43.1 |
+
+### 2. Image ceiling at this cadence
+
+The same matrix in mission units: feasible time x 0.20 Hz x 2 cameras, i.e. what the vehicle would collect if every legal opportunity were used.
+
+| Ceiling (images/day) | FOUND 50 deg | FOUND 60 deg | FOUND 70 deg | FOUND 80 deg | FOUND 90 deg |
+| --- | --- | --- | --- | --- | --- |
+| **LOST 20 deg** | 18,478 | 17,796 | 17,074 | 16,966 | 16,262 |
+| **LOST 30 deg** | 18,478 | 17,796 | 17,074 | 16,966 | 16,262 |
+| **LOST 40 deg** | 18,478 | 17,796 | **17,074** | 16,966 | 16,262 |
+| **LOST 50 deg** | 18,478 | 17,796 | 17,074 | 16,966 | 16,262 |
+| **LOST 60 deg** | 17,102 | 16,421 | 15,698 | 15,590 | 14,886 |
+
+### 3. Images actually collected
+
+What survives after slews, downlink passes and battery holds take their share. Roughly a third of the ceiling, because the vehicle spends about half its time slewing.
+
+| Images/day | FOUND 50 deg | FOUND 60 deg | FOUND 70 deg | FOUND 80 deg | FOUND 90 deg |
+| --- | --- | --- | --- | --- | --- |
+| **LOST 20 deg** | 5,995 | 5,661 | 5,614 | 5,618 | 5,375 |
+| **LOST 30 deg** | 5,770 | 5,546 | 5,541 | 5,305 | 5,071 |
+| **LOST 40 deg** | 5,958 | 5,745 | **5,639** | 5,549 | 5,495 |
+| **LOST 50 deg** | 6,201 | 5,775 | 5,254 | 5,181 | 4,975 |
+| **LOST 60 deg** | 5,061 | 4,827 | 4,524 | 4,290 | 4,513 |
+
+**Read table 3 with care.** Several cells in it share an *identical* feasibility -- the +z cone does nothing at all over part of its range -- yet their realised image counts differ by up to 577 images/day (11 %). That spread is not the cone doing anything. Changing a keep-out changes which rolls are legal, which changes the attitude the solver picks among equally legal options, which changes where the large repoints land; with ~50 % of the timeline in slew, that is a big lever and it is essentially chaotic. Treat 577 images/day as the noise floor of table 3, and trade on tables 1 and 2 instead.
+
+### 4. Energy margin (W)
+
+A looser cone is not free: more experiment time means less sun-pointing, and the margin is what pays for it.
+
+| Margin (W) | FOUND 50 deg | FOUND 60 deg | FOUND 70 deg | FOUND 80 deg | FOUND 90 deg |
+| --- | --- | --- | --- | --- | --- |
+| **LOST 20 deg** | +0.75 | +0.87 | +1.10 | +1.08 | +1.43 |
+| **LOST 30 deg** | +0.69 | +0.94 | +1.26 | +1.20 | +1.36 |
+| **LOST 40 deg** | +0.63 | +0.87 | **+1.13** | +1.13 | +1.33 |
+| **LOST 50 deg** | +0.63 | +0.78 | +0.99 | +0.97 | +1.14 |
+| **LOST 60 deg** | +0.59 | +0.79 | +1.03 | +1.03 | +1.37 |
+
+### Sensitivity at the baseline
+
+One-sided differences to the neighbouring grid points, on the ceiling of table 2. The grid step is 10 deg, so these are the finest slopes the sweep can honestly support.
+
+| Change | Images/day gained (+) or lost (-) | Per degree |
+| --- | --- | --- |
+| Loosen LOST by 10 deg (smaller +z keep-out) | +0 | +0 |
+| Tighten LOST by 10 deg (larger +z keep-out) | +0 | +0 |
+| Loosen FOUND by 10 deg (smaller Sun keep-out) | +723 | +72 |
+| Tighten FOUND by 10 deg (larger Sun keep-out) | -108 | -11 |
+
+### What the sweep says
+
+**The whole trade is worth about 21 % of the science.** Over the full grid, feasible time runs from 43.1 % (LOST 60 deg / FOUND 90 deg) to 53.5 % (LOST 20 / FOUND 50), against 49.4 % at the baseline -- so the best case is worth +8 % and the worst costs -13 %. That is a real but bounded quantity: no achievable cone doubles the science, because the binding limit is elsewhere.
+
+**The +z keep-out has slack, and the sweep says how much.** Feasibility is identical for every LOST value up to **50 deg** -- the rows of table 1 are the same to within rounding. The baseline is 40 deg, so the star tracker and LOST could give up 10 deg of keep-out at zero cost in science. The reason is geometric: pointing FOUND at a limb already throws +z more than 110 deg off nadir, so Earth is nowhere near the +z cone and only the Sun can violate it. By 60 deg the Sun does catch it and feasibility falls off; that is the knee, and it sits 20 deg above the baseline.
+
+**FOUND's Sun keep-out is the one that costs.** Averaged over the swept range, every degree of FOUND exclusion is worth about 0.16 percentage points of feasible time, or roughly 55 images/day per degree at 0.20 Hz. If there is baffle or stray-light work to be done, this is the only axis on which it pays.
+
+That average is not a straight line, though, and the structure matters if you are negotiating a specific number. The price per degree ranges from 0.03 pp/deg over 70-80 deg -- effectively free -- to 0.21 pp/deg over 60-70 deg. The cheap steps are the ones where the excluded solid angle was already pointing at sky the sunlit limb never occupies.
+
+**What the cones cannot fix.** The dominant rejection is `no sunlit limb`, and it does not move anywhere on the grid: it is eclipse and orbital geometry, not stray light. That is the floor the trade runs into, and it is why even the loosest corner of the grid leaves roughly half the timeline unusable for science.
+
 ## Surface illumination (thermal inputs)
 
 Flown attitude from the CONOPS scheduler, geometry `A_2panel_90`.

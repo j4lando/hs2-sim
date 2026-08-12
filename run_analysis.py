@@ -23,7 +23,8 @@ import time
 
 import numpy as np
 
-from hs2sim import adcs, comms, conops, environment, geometry, power, thermal
+from hs2sim import (adcs, comms, conops, environment, exclusion, geometry,
+                    power, thermal)
 from hs2sim.config import MissionConfig, RESULTS_DIR
 
 
@@ -69,6 +70,13 @@ def main() -> int:
     parser.add_argument("--vizard-live", action="store_true",
                         help="stream to a running Vizard instead of saving "
                              "a file")
+    parser.add_argument("--exclusion-sweep", dest="exclusion_sweep",
+                        action="store_true", default=None,
+                        help="run the camera exclusion-angle trade "
+                             "(default: on, off under --quick)")
+    parser.add_argument("--no-exclusion-sweep", dest="exclusion_sweep",
+                        action="store_false",
+                        help="skip the exclusion-angle trade")
     args = parser.parse_args()
 
     cfg = MissionConfig()
@@ -82,6 +90,8 @@ def main() -> int:
 
     n_az = 24 if args.quick else 48
     n_roll = 24 if args.quick else 48
+    if args.exclusion_sweep is None:
+        args.exclusion_sweep = not args.quick
 
     RESULTS_DIR.mkdir(exist_ok=True)
     results: dict[str, object] = {}
@@ -185,6 +195,10 @@ def main() -> int:
     geometries = power.all_array_geometries(cfg)
     per_geometry: dict[str, object] = {}
     flown_attitudes: dict[str, np.ndarray] = {}
+    # Kept so the exclusion sweep can re-run the scheduler on one geometry
+    # without redoing the standby attitude solve.
+    array_by_name: dict[str, power.ArrayGeometry] = {}
+    standby_attitudes: dict[str, np.ndarray] = {}
 
     for array in geometries:
         log(f"  geometry {array.name} ({array.peak_total_w:.1f} W peak)")
@@ -283,9 +297,59 @@ def main() -> int:
         entry["payload_rate_sweep"] = sweep
         # Keep the flown attitude so it can be handed to Vizard afterwards.
         flown_attitudes[array.name] = result.dcm_BN
+        array_by_name[array.name] = array
+        standby_attitudes[array.name] = standby_dcm
         per_geometry[array.name] = entry
 
     results["geometries"] = per_geometry
+
+    # ------------------------------------------- exclusion-angle trade study
+    if args.exclusion_sweep:
+        sweep_cfg = cfg.mission.analysis.exclusion_sweep
+        # Run it on the geometry that is actually flyable -- the one with the
+        # best energy margin. Feasibility itself does not depend on the array,
+        # but images/day does, through how much charging time the vehicle has
+        # to give up.
+        reference = max(per_geometry,
+                        key=lambda n: per_geometry[n]["conops_baseline"][
+                            "energy_margin_w"])
+        n_grid = int(sweep_cfg.search_resolution)
+        rate = float(sweep_cfg.payload_rate_hz)
+        log(f"Sweeping camera exclusion angles on {reference} "
+            f"({len(sweep_cfg.lost_deg)}x{len(sweep_cfg.found_deg)} grid, "
+            f"{n_grid}x{n_grid} pointing search, {rate} Hz)...")
+        sweep_result = exclusion.sweep(
+            cfg, env, array_by_name[reference], standby_attitudes[reference],
+            authority, passes,
+            lost_deg=sweep_cfg.lost_deg, found_deg=sweep_cfg.found_deg,
+            n_grid=n_grid, payload_rate_hz=rate, log=log)
+        sweep_result["reference_geometry"] = reference
+
+        # Self-check: the sweep re-solves pointing on a coarser azimuth/roll
+        # grid than the headline run, so the baseline cell should reproduce the
+        # headline feasibility. A large gap would mean the coarse grid is
+        # missing legal attitudes and the whole sweep is biased.
+        baseline_lost = float(min(
+            float(cfg.spacecraft.sensors.lost_camera.sun_exclusion_deg),
+            float(cfg.spacecraft.sensors.star_tracker.sun_exclusion_deg)))
+        baseline_found = float(cfg.spacecraft.sensors.found_camera.sun_exclusion_deg)
+        sweep_result["baseline"] = {
+            "lost_deg": baseline_lost,
+            "found_deg": baseline_found,
+            "headline_feasible_fraction": float(
+                per_geometry[reference]["experiment_feasible_fraction"]),
+            "headline_images_per_day": float(
+                per_geometry[reference]["conops_baseline"]["images_per_day"]),
+            "headline_search_resolution": n_az,
+            **exclusion.sensitivity(sweep_result, baseline_lost, baseline_found),
+        }
+        sweep_result["character"] = exclusion.characterise(sweep_result)
+        results["exclusion_sweep"] = sweep_result
+        log(f"  sweep took {sweep_result['runtime_s']/60:.1f} min; baseline "
+            f"cell feasible "
+            f"{sweep_result['baseline'].get('baseline_feasible_fraction', float('nan'))*100:.1f} % "
+            f"vs headline "
+            f"{sweep_result['baseline']['headline_feasible_fraction']*100:.1f} %")
 
     # ------------------------------------------------------- data budget
     log("Closing the data budget...")

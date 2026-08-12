@@ -55,3 +55,22 @@ analysis:
   # Payload cadence candidates (experiments per second). The budget assumed
   # 0.2 Hz; the user asked for this to be a free parameter.
   payload_rate_hz_sweep: [0.02, 0.05, 0.1, 0.2, 0.5, 1.0]
+
+  # Exclusion-angle trade. Both cameras' keep-out cones are swept to see what
+  # relaxing (or tightening) them buys in science time.
+  #
+  # `lost_deg` moves the +z exclusion, applied to BOTH Sun and Earth: the
+  # requirement quotes one angle covering both ("may not have earth or the sun
+  # in their exclusion angle"), and the star tracker shares the face, so the
+  # two move together. `found_deg` moves FOUND's Sun exclusion on +x.
+  #
+  # Both lists include the baseline (40, 70) so the sweep contains a direct
+  # comparison point against the headline run.
+  exclusion_sweep:
+    lost_deg: [20, 30, 40, 50, 60]
+    found_deg: [50, 60, 70, 80, 90]
+    # The pointing search is re-run for every grid point, so it uses a coarser
+    # azimuth/roll grid than the headline run. 32 gives ~11 deg resolution,
+    # which resolves feasibility fractions to well under a percent.
+    search_resolution: 32
+    payload_rate_hz: 0.2

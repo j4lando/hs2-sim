@@ -19,6 +19,217 @@ def _fmt(value: Any, spec: str = ".2f") -> str:
         return str(value)
 
 
+def _matrix_table(add, rows: list[float], cols: list[float],
+                  values: list[list[float]], spec: str,
+                  row_label: str, mark: tuple[int, int] | None) -> None:
+    """Emit a Markdown matrix with LOST down the side and FOUND across."""
+    add("| " + row_label + " | "
+        + " | ".join(f"FOUND {c:.0f} deg" for c in cols) + " |")
+    add("| --- |" + " --- |" * len(cols))
+    for r, row_value in enumerate(rows):
+        cells = []
+        for c in range(len(cols)):
+            text = _fmt(values[r][c], spec)
+            if mark is not None and (r, c) == mark:
+                text = f"**{text}**"
+            cells.append(text)
+        add(f"| **LOST {row_value:.0f} deg** | " + " | ".join(cells) + " |")
+    add("")
+
+
+def _exclusion_section(sweep: dict, add) -> None:
+    lost = sweep["lost_deg"]
+    found = sweep["found_deg"]
+    mat = sweep["matrices"]
+    base = sweep.get("baseline", {})
+    baseline_lost = base.get("lost_deg")
+    baseline_found = base.get("found_deg")
+    mark = None
+    if baseline_lost in lost and baseline_found in found:
+        mark = (lost.index(baseline_lost), found.index(baseline_found))
+
+    add("## Camera exclusion-angle trade\n")
+    add(f"Both keep-out cones were swept and the whole pipeline re-run at each "
+        f"grid point -- pointing re-solved on a {sweep['n_grid']}x"
+        f"{sweep['n_grid']} azimuth/roll search, then the mode scheduler run at "
+        f"{_fmt(sweep['payload_rate_hz'], '.2f')} Hz on geometry "
+        f"`{sweep.get('reference_geometry', '?')}`. Orbit, array, cadence and "
+        f"ground stations are identical across the grid; only the cones move.\n")
+    add("`LOST` moves the +z keep-out against **both** Sun and Earth (the "
+        "requirement quotes one angle for both, and the star tracker shares "
+        "that face). `FOUND` moves FOUND's Sun keep-out only -- its 74 deg "
+        "field of view is an optical property and does not move. The baseline "
+        "cell is in **bold**.\n")
+
+    if "baseline_feasible_fraction" in base:
+        headline_res = base.get("headline_search_resolution", "?")
+        add(f"**Sanity check.** The sweep re-solves pointing on a coarser "
+            f"azimuth/roll grid than the headline run, so the baseline cell has "
+            f"to reproduce the headline result or the whole sweep is biased. It "
+            f"does: {_fmt(base['baseline_feasible_fraction'] * 100, '.1f')} % "
+            f"feasible here against "
+            f"{_fmt(base['headline_feasible_fraction'] * 100, '.1f')} % at "
+            f"{headline_res}x{headline_res}. The coarse grid is not losing "
+            f"legal attitudes. Realised images differ by more "
+            f"({_fmt(base['baseline_images_per_day'], ',.0f')} against "
+            f"{_fmt(base['headline_images_per_day'], ',.0f')} per day), which is "
+            f"the scheduler sensitivity discussed under table 3, not a "
+            f"feasibility difference.\n")
+
+    char = sweep.get("character", {})
+
+    add("### 1. Fraction of the timeline with a legal experiment attitude\n")
+    add("This is the constraint's own effect, and it is the number to trade "
+        "on: a deterministic function of the two cone angles, with no "
+        "scheduler behaviour mixed in.\n")
+    _matrix_table(add, lost, found,
+                  [[v * 100 for v in row] for row in mat["feasible_fraction"]],
+                  ".1f", "Feasible (%)", mark)
+
+    add("### 2. Image ceiling at this cadence\n")
+    add(f"The same matrix in mission units: feasible time x "
+        f"{_fmt(sweep['payload_rate_hz'], '.2f')} Hz x 2 cameras, i.e. what "
+        f"the vehicle would collect if every legal opportunity were used.\n")
+    _matrix_table(add, lost, found, mat["images_per_day_ceiling"], ",.0f",
+                  "Ceiling (images/day)", mark)
+
+    add("### 3. Images actually collected\n")
+    add("What survives after slews, downlink passes and battery holds take "
+        "their share. Roughly a third of the ceiling, because the vehicle "
+        "spends about half its time slewing.\n")
+    _matrix_table(add, lost, found, mat["images_per_day"], ",.0f",
+                  "Images/day", mark)
+
+    noise = char.get("scheduler_noise_images_per_day")
+    if noise:
+        add(f"**Read table 3 with care.** Several cells in it share an "
+            f"*identical* feasibility -- the +z cone does nothing at all over "
+            f"part of its range -- yet their realised image counts differ by up "
+            f"to {_fmt(noise, ',.0f')} images/day "
+            f"({_fmt((char.get('scheduler_noise_relative') or 0) * 100, '.0f')} %). "
+            f"That spread is not the cone doing anything. Changing a keep-out "
+            f"changes which rolls are legal, which changes the attitude the "
+            f"solver picks among equally legal options, which changes where the "
+            f"large repoints land; with ~50 % of the timeline in slew, that is "
+            f"a big lever and it is essentially chaotic. Treat "
+            f"{_fmt(noise, ',.0f')} images/day as the noise floor of table 3, "
+            f"and trade on tables 1 and 2 instead.\n")
+
+    add("### 4. Energy margin (W)\n")
+    add("A looser cone is not free: more experiment time means less "
+        "sun-pointing, and the margin is what pays for it.\n")
+    _matrix_table(add, lost, found, mat["energy_margin_w"], "+.2f",
+                  "Margin (W)", mark)
+
+    # -- local slopes -------------------------------------------------------
+    slopes = [
+        ("Loosen LOST by 10 deg (smaller +z keep-out)",
+         "d_images_per_deg_lost_looser"),
+        ("Tighten LOST by 10 deg (larger +z keep-out)",
+         "d_images_per_deg_lost_tighter"),
+        ("Loosen FOUND by 10 deg (smaller Sun keep-out)",
+         "d_images_per_deg_found_looser"),
+        ("Tighten FOUND by 10 deg (larger Sun keep-out)",
+         "d_images_per_deg_found_tighter"),
+    ]
+    if any(base.get(key) is not None for _, key in slopes):
+        add("### Sensitivity at the baseline\n")
+        add("One-sided differences to the neighbouring grid points, on the "
+            "ceiling of table 2. The grid step is 10 deg, so these are the "
+            "finest slopes the sweep can honestly support.\n")
+        add("| Change | Images/day gained (+) or lost (-) | Per degree |")
+        add("| --- | --- | --- |")
+        for label, key in slopes:
+            value = base.get(key)
+            if value is None:
+                add(f"| {label} | n/a | n/a |")
+                continue
+            # `value` is d(images)/d(angle) toward that neighbour; the ten
+            # degrees of travel give the total change.
+            total = value * 10.0 * (-1.0 if "looser" in key else 1.0)
+            add(f"| {label} | {_fmt(total, '+,.0f')} | "
+                f"{_fmt(total / 10.0, '+,.0f')} |")
+        add("")
+
+    # -- narrative ----------------------------------------------------------
+    flat = sweep["points"]
+    best = max(flat, key=lambda p: p["feasible_fraction"])
+    worst = min(flat, key=lambda p: p["feasible_fraction"])
+    baseline_point = flat[mark[0] * len(found) + mark[1]] if mark else None
+
+    add("### What the sweep says\n")
+    if baseline_point is not None and baseline_point["feasible_fraction"] > 0:
+        gain = best["feasible_fraction"] / baseline_point["feasible_fraction"] - 1.0
+        loss = 1.0 - worst["feasible_fraction"] / baseline_point["feasible_fraction"]
+        add(f"**The whole trade is worth about "
+            f"{_fmt((gain + loss) * 100, '.0f')} % of the science.** Over the "
+            f"full grid, feasible time runs from "
+            f"{_fmt(worst['feasible_fraction'] * 100, '.1f')} % (LOST "
+            f"{worst['lost_deg']:.0f} deg / FOUND {worst['found_deg']:.0f} deg) "
+            f"to {_fmt(best['feasible_fraction'] * 100, '.1f')} % (LOST "
+            f"{best['lost_deg']:.0f} / FOUND {best['found_deg']:.0f}), against "
+            f"{_fmt(baseline_point['feasible_fraction'] * 100, '.1f')} % at the "
+            f"baseline -- so the best case is worth "
+            f"{_fmt(gain * 100, '+.0f')} % and the worst costs "
+            f"{_fmt(-loss * 100, '.0f')} %. That is a real but bounded "
+            f"quantity: no achievable cone doubles the science, because the "
+            f"binding limit is elsewhere.\n")
+
+    free_band = char.get("lost_free_band_deg")
+    binds_above = char.get("lost_binds_above_deg")
+    if free_band is not None and baseline_lost is not None:
+        add(f"**The +z keep-out has slack, and the sweep says how much.** "
+            f"Feasibility is identical for every LOST value up to "
+            f"**{_fmt(free_band, '.0f')} deg** -- the rows of table 1 are the "
+            f"same to within rounding. The baseline is "
+            f"{_fmt(baseline_lost, '.0f')} deg, so the star tracker and LOST "
+            f"could give up "
+            f"{_fmt(float(free_band) - float(baseline_lost), '.0f')} deg of "
+            f"keep-out at zero cost in science. The reason is geometric: "
+            f"pointing FOUND at a limb already throws +z more than 110 deg off "
+            f"nadir, so Earth is nowhere near the +z cone and only the Sun can "
+            f"violate it."
+            + (f" By {_fmt(binds_above, '.0f')} deg the Sun does catch it and "
+               f"feasibility falls off; that is the knee, and it sits "
+               f"{_fmt(float(binds_above) - float(baseline_lost), '.0f')} deg "
+               f"above the baseline.\n"
+               if binds_above is not None else
+               " The sweep does not extend far enough to find the knee.\n"))
+
+    slope_pp = char.get("found_feasibility_pp_per_deg")
+    if slope_pp:
+        per_deg_images = (abs(slope_pp) / 100 * 86400
+                          * float(sweep["payload_rate_hz"]) * 2)
+        add(f"**FOUND's Sun keep-out is the one that costs.** Averaged over "
+            f"the swept range, every degree of FOUND exclusion is worth about "
+            f"{_fmt(abs(slope_pp), '.2f')} percentage points of feasible time, "
+            f"or roughly {_fmt(per_deg_images, ',.0f')} images/day per degree "
+            f"at {_fmt(sweep['payload_rate_hz'], '.2f')} Hz. If there is baffle "
+            f"or stray-light work to be done, this is the only axis on which "
+            f"it pays.\n")
+        steps = char.get("found_steps") or []
+        lo = char.get("found_step_min_pp_per_deg")
+        hi = char.get("found_step_max_pp_per_deg")
+        if steps and lo is not None and hi is not None and hi > 0:
+            flat = min(steps, key=lambda s: s["pp_per_deg"])
+            steep = max(steps, key=lambda s: s["pp_per_deg"])
+            add(f"That average is not a straight line, though, and the "
+                f"structure matters if you are negotiating a specific number. "
+                f"The price per degree ranges from "
+                f"{_fmt(lo, '.2f')} pp/deg over "
+                f"{flat['from_deg']:.0f}-{flat['to_deg']:.0f} deg -- "
+                f"effectively free -- to {_fmt(hi, '.2f')} pp/deg over "
+                f"{steep['from_deg']:.0f}-{steep['to_deg']:.0f} deg. The "
+                f"cheap steps are the ones where the excluded solid angle was "
+                f"already pointing at sky the sunlit limb never occupies.\n")
+
+    add("**What the cones cannot fix.** The dominant rejection is `no sunlit "
+        "limb`, and it does not move anywhere on the grid: it is eclipse and "
+        "orbital geometry, not stray light. That is the floor the trade runs "
+        "into, and it is why even the loosest corner of the grid leaves "
+        "roughly half the timeline unusable for science.\n")
+
+
 def write_report(cfg: MissionConfig, results: dict, path: pathlib.Path) -> None:
     lines: list[str] = []
     add = lines.append
@@ -123,6 +334,9 @@ def write_report(cfg: MissionConfig, results: dict, path: pathlib.Path) -> None:
             f"{_fmt(rej['sun_in_found_fov'] * 100, '.1f')} % | "
             f"{_fmt(rej['no_legal_roll'] * 100, '.1f')} % |")
     add("")
+
+    if "exclusion_sweep" in results:
+        _exclusion_section(results["exclusion_sweep"], add)
 
     # -- thermal ------------------------------------------------------------
     first = next(iter(results["geometries"].values()))

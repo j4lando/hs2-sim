@@ -12,7 +12,7 @@ import math
 import numpy as np
 import pytest
 
-from hs2sim import comms, geometry, thermal
+from hs2sim import comms, exclusion, geometry, thermal
 from hs2sim.config import MissionConfig
 from hs2sim.environment import R_EARTH, EnvironmentResult
 
@@ -191,3 +191,91 @@ def test_max_experiments_inverts_the_data_budget():
     n = comms.max_experiments_from_downlink(cfg, capacity, contact)
     budget = comms.data_budget(cfg, n, contact)
     assert budget.downlink_bytes_per_day == pytest.approx(capacity, rel=1e-3)
+
+
+# ---------------------------------------------------------------------------
+# Exclusion-angle sweep
+# ---------------------------------------------------------------------------
+
+def test_exclusion_sweep_overrides_target_real_config_keys():
+    """The dotted override paths must already exist in the YAML.
+
+    ``MissionConfig.copy_with`` assigns into the target dict without checking
+    that the key is there, so a typo in a path would silently create a new,
+    unread key -- the sweep would run, produce a smooth-looking matrix, and be
+    measuring nothing. This is the test that catches that.
+    """
+    cfg = MissionConfig()
+    for dotted in exclusion.LOST_PATHS + (exclusion.FOUND_PATH,):
+        node = cfg
+        parts = dotted.split(".")
+        for part in parts[:-1]:
+            node = getattr(node, part)
+        assert parts[-1] in node, f"{dotted} is not a key in the config"
+
+
+def test_exclusion_override_actually_changes_feasibility():
+    """A much larger FOUND keep-out must reject at least as much as a small one."""
+    cfg = MissionConfig()
+    env = make_env(n=24)
+    loose = cfg.copy_with(**{exclusion.FOUND_PATH: 20.0})
+    tight = cfg.copy_with(**{exclusion.FOUND_PATH: 100.0})
+    a = geometry.solve_experiment_pointing(loose, env, n_azimuth=24, n_roll=24)
+    b = geometry.solve_experiment_pointing(tight, env, n_azimuth=24, n_roll=24)
+    assert b.feasible.sum() <= a.feasible.sum()
+    # And the tighter cone must reject *for the right reason*.
+    if b.feasible.sum() < a.feasible.sum():
+        assert np.any(b.reject_reason == geometry.REJECT_SUN_IN_FOUND)
+
+
+def _fake_sweep() -> dict:
+    """A sweep result with a known free band and a known scheduler spread."""
+    lost = [20.0, 30.0, 40.0]
+    found = [50.0, 60.0]
+    # Rows 0 and 1 are identical -> free band up to 30 deg. Row 2 differs.
+    feasible = [[0.50, 0.40], [0.50, 0.40], [0.30, 0.20]]
+    # Cells sharing a feasibility disagree by 1000 images -> that is the noise.
+    images = [[5000.0, 4000.0], [6000.0, 4000.0], [3000.0, 2000.0]]
+    ceiling = [[f * 86400 * 0.2 * 2 for f in row] for row in feasible]
+    return {
+        "lost_deg": lost,
+        "found_deg": found,
+        "matrices": {
+            "feasible_fraction": feasible,
+            "images_per_day": images,
+            "images_per_day_ceiling": ceiling,
+        },
+    }
+
+
+def test_characterise_finds_the_free_band_and_the_knee():
+    out = exclusion.characterise(_fake_sweep())
+    assert out["lost_free_band_deg"] == 30.0
+    assert out["lost_binds_above_deg"] == 40.0
+
+
+def test_characterise_measures_scheduler_noise_from_equal_feasibility_cells():
+    out = exclusion.characterise(_fake_sweep())
+    # The 5000/6000 pair shares a feasibility of 0.50, so the noise is 1000.
+    assert out["scheduler_noise_images_per_day"] == pytest.approx(1000.0)
+
+
+def test_characterise_found_slope_sign_and_magnitude():
+    out = exclusion.characterise(_fake_sweep())
+    # Feasibility falls 10 pp over 10 deg in every row -> 1.0 pp/deg, positive
+    # by the "cost of tightening" sign convention.
+    assert out["found_feasibility_pp_per_deg"] == pytest.approx(1.0)
+    assert out["found_monotone"] is True
+
+
+def test_sensitivity_slopes_use_the_ceiling_not_the_noisy_count():
+    sweep = _fake_sweep()
+    out = exclusion.sensitivity(sweep, baseline_lost=30.0, baseline_found=60.0)
+    # Loosening FOUND from 60 to 50 deg raises feasibility 0.40 -> 0.50, worth
+    # 0.10 * 86400 * 0.2 Hz * 2 cameras = 3456 images/day over 10 deg. The
+    # slope is d(images)/d(angle), so it is negative: a bigger cone means
+    # fewer images. The report flips it when it prints "loosen".
+    assert out["d_images_per_deg_found_looser"] == pytest.approx(-345.6)
+    # It must not have been computed off the images_per_day matrix, where the
+    # same step is flat (4000 -> 6000 is a different column).
+    assert out["baseline_images_per_day"] == 4000.0

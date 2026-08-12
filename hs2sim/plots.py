@@ -133,3 +133,64 @@ def make_all(cfg: MissionConfig, env: EnvironmentResult,
     fig.tight_layout()
     fig.savefig(out_dir / "payload_rate.png", dpi=140)
     plt.close(fig)
+
+    # -- exclusion-angle trade -----------------------------------------------
+    if "exclusion_sweep" in results:
+        _exclusion_heatmaps(results["exclusion_sweep"], out_dir, plt)
+
+
+def _exclusion_heatmaps(sweep: dict, out_dir: pathlib.Path, plt) -> None:
+    lost = sweep["lost_deg"]
+    found = sweep["found_deg"]
+    mat = sweep["matrices"]
+    base = sweep.get("baseline", {})
+
+    # Panels 1 and 2 are the same quantity in different units and carry the
+    # trade; panel 3 is what the scheduler actually delivers and is noisy (see
+    # `exclusion.characterise`); panel 4 is what it costs.
+    panels = [
+        ("feasible_fraction", "Legal attitude exists (%)", 100.0, "{:.1f}", "viridis"),
+        ("images_per_day_ceiling", "Image ceiling (images/day)", 1.0, "{:,.0f}",
+         "viridis"),
+        ("images_per_day", "Images actually collected (noisy)", 1.0, "{:,.0f}",
+         "magma"),
+        ("energy_margin_w", "Energy margin (W)", 1.0, "{:+.2f}", "coolwarm_r"),
+    ]
+
+    fig, axes = plt.subplots(2, 2, figsize=(11, 8.5))
+    for ax, (key, title, scale, cell_fmt, cmap) in zip(axes.ravel(), panels):
+        data = np.array(mat[key], dtype=float) * scale
+        im = ax.imshow(data, origin="lower", aspect="auto", cmap=cmap)
+        ax.set_xticks(np.arange(len(found)))
+        ax.set_xticklabels([f"{v:.0f}" for v in found])
+        ax.set_yticks(np.arange(len(lost)))
+        ax.set_yticklabels([f"{v:.0f}" for v in lost])
+        ax.set_xlabel("FOUND Sun exclusion (deg)")
+        ax.set_ylabel("LOST / star tracker exclusion (deg)")
+        ax.set_title(title, fontsize=10)
+        for r in range(len(lost)):
+            for c in range(len(found)):
+                # Pick the label colour off the cell's actual rendered
+                # luminance. Using the normalised value instead breaks on
+                # diverging maps, whose midpoint is the *lightest* colour.
+                red, green, blue, _ = im.cmap(im.norm(data[r, c]))
+                luminance = 0.2126 * red + 0.7152 * green + 0.0722 * blue
+                ax.text(c, r, cell_fmt.format(data[r, c]),
+                        ha="center", va="center", fontsize=7,
+                        color="white" if luminance < 0.5 else "black")
+        fig.colorbar(im, ax=ax, fraction=0.046, pad=0.03)
+
+        # Ring the baseline cell.
+        if base.get("lost_deg") in lost and base.get("found_deg") in found:
+            r = lost.index(base["lost_deg"])
+            c = found.index(base["found_deg"])
+            ax.add_patch(plt.Rectangle((c - 0.5, r - 0.5), 1, 1, fill=False,
+                                       edgecolor="#00ff88", lw=2.0))
+
+    fig.suptitle(
+        f"Camera exclusion-angle trade ({sweep.get('reference_geometry', '')}, "
+        f"{sweep['payload_rate_hz']:.2f} Hz) -- green box is the baseline",
+        fontsize=11)
+    fig.tight_layout(rect=(0, 0, 1, 0.96))
+    fig.savefig(out_dir / "exclusion_sweep.png", dpi=140)
+    plt.close(fig)

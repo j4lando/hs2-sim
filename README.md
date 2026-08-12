@@ -22,6 +22,7 @@ pip install -r requirements.txt      # numpy, scipy, matplotlib, pyyaml, pytest
 python run_analysis.py               # full run -> results/
 python run_analysis.py --quick       # 1 day, coarse search, for a fast check
 python run_analysis.py --vizard      # also export a Vizard recording
+python run_analysis.py --no-exclusion-sweep   # skip the keep-out trade study
 pytest tests/                        # physics checks, no Basilisk needed
 ```
 
@@ -56,6 +57,38 @@ fixing the FOUND boresight leaves one free parameter — roll about +x — so
 whether *any* legal attitude exists at each instant. Where several are legal it
 picks the one that generates the most solar power. `tests/test_physics.py`
 independently re-checks the solver's own answers against every keep-out cone.
+
+## The camera exclusion-angle trade
+
+`hs2sim/exclusion.py` re-solves the whole pointing problem and re-runs the mode
+scheduler across a grid of both keep-out cones, so the question "what would a
+different exclusion angle buy us" is answered in images per day rather than in
+solid angle. The grid is in `config/mission.yaml` under
+`analysis.exclusion_sweep`; results land in `results/report.md` and
+`results/exclusion_sweep.png`.
+
+`LOST` moves the +z keep-out against **both** Sun and Earth, because the
+requirement quotes a single angle for both and the star tracker shares that
+face. `FOUND` moves FOUND's Sun keep-out only — its 74 deg field of view is an
+optical property and does not move.
+
+One thing to know before reading the output. Three quantities are reported and
+they are not equally trustworthy:
+
+| Quantity | What it is | Trust |
+| --- | --- | --- |
+| Feasible fraction | how much of the timeline has a legal attitude | deterministic function of the cones |
+| Image ceiling | feasible fraction × cadence × 2 cameras | same number, mission units |
+| Images collected | what the scheduler actually delivers | carries a large noise term |
+
+The last one is noisy for a real reason, not a numerical one. Changing a
+keep-out changes which rolls are legal, which changes *which* of several
+equally legal attitudes the solver picks, which changes where the large
+repoints land. With roughly half the timeline spent slewing, that is a big
+lever and it behaves chaotically. The sweep measures the size of that effect
+directly — several grid cells have identical feasibility, so their disagreement
+in realised images is the noise floor — and the report prints it. Trade on
+feasibility; read the realised count as an existence proof, not a ranking.
 
 ## What is trusted, and what is not
 
@@ -168,6 +201,7 @@ hs2sim/
   comms.py       passes, link budget, data budget
   adcs.py        magnetorquer authority, slew times, disturbances
   conops.py      the mode scheduler
+  exclusion.py   camera keep-out angle trade study
   report.py      Markdown report generation
   plots.py       figures
   vizard.py      CONOPS export for 3D playback
