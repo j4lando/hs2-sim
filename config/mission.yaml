@@ -66,6 +66,7 @@ analysis:
   #
   # Both lists include the baseline (40, 70) so the sweep contains a direct
   # comparison point against the headline run.
+  #
   # The LOST axis runs to 80 deg because that is where the geometry has to
   # break. Pointing FOUND at the limb fixes +x at the Earth angular radius
   # (~70 deg off nadir), and +z is perpendicular to it, so +z can reach at most
@@ -80,3 +81,28 @@ analysis:
     # which resolves feasibility fractions to well under a percent.
     search_resolution: 32
     payload_rate_hz: 0.2
+
+    # Pointing-error buffer, in degrees, that every keep-out is enforced with.
+    # This is an ADCS performance number rather than a payload requirement, but
+    # it enters exactly the same inequality: a degree of pointing error costs
+    # the same feasibility as a degree of extra keep-out. Sweeping it prices
+    # ADCS work in the same currency as optical work.
+    #
+    # 0 is the unbuffered geometric answer -- not flyable, but it is the
+    # reference the rest are measured against. The configured budget
+    # (control + knowledge, see spacecraft.yaml) is included so the sweep
+    # contains the as-designed point.
+    #
+    # It runs out to 21 deg, far past anything a real vehicle would fly, on
+    # purpose: a buffer of m is the same inequality as moving both cones out by
+    # m, so the knee must sit where the cone grid's knee sits. Going that far
+    # turns "the buffer is cheap" from an assertion into a measurement of how
+    # much slack there is before it stops being cheap.
+    #
+    # 11.1 and 21.1 are in the list for the cross-check rather than for their
+    # own sake. A buffer of m enforces (40 + m, 70 + m); a grid cell (L, F) is
+    # itself solved with the configured 1.1 deg buffer, so it enforces
+    # (L + 1.1, F + 1.1). The two coincide when L = 38.9 + m -- which lands on
+    # the grid's 50 and 60 deg rows at m = 11.1 and 21.1.
+    pointing_margin_deg: [0.0, 0.5, 1.1, 2.0, 3.0, 5.0, 10.0, 11.1, 15.0,
+                          20.0, 21.1]

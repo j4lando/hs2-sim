@@ -194,8 +194,12 @@ def simulate(cfg: MissionConfig,
     downlink_trigger = float(policy.downlink_trigger_bytes)
     intra_mode_slew_threshold = math.radians(
         float(policy.intra_mode_slew_threshold_deg))
+    # A slew is "done" once the attitude is inside the control error -- the
+    # controller cannot do better than that, so waiting for more is waiting
+    # forever. Knowledge error does not belong here: it does not stop the
+    # vehicle from being where it was told to go.
     pointing_accuracy = math.radians(
-        float(cfg.spacecraft.adcs.pointing_accuracy_deg))
+        float(cfg.spacecraft.adcs.control_error_deg))
 
     inertia = inertia_matrix(cfg)
     slew_margin = float(cfg.spacecraft.adcs.settle_margin)

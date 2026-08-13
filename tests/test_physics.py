@@ -12,7 +12,7 @@ import math
 import numpy as np
 import pytest
 
-from hs2sim import comms, exclusion, geometry, thermal
+from hs2sim import adcs, comms, exclusion, geometry, thermal
 from hs2sim.config import MissionConfig
 from hs2sim.environment import R_EARTH, EnvironmentResult
 
@@ -279,3 +279,84 @@ def test_sensitivity_slopes_use_the_ceiling_not_the_noisy_count():
     # It must not have been computed off the images_per_day matrix, where the
     # same step is flat (4000 -> 6000 is a different column).
     assert out["baseline_images_per_day"] == 4000.0
+
+
+# ---------------------------------------------------------------------------
+# Pointing-error buffer
+# ---------------------------------------------------------------------------
+
+def test_pointing_margin_combination_rules():
+    cfg = MissionConfig()
+    control = float(cfg.spacecraft.adcs.control_error_deg)
+    knowledge = float(cfg.spacecraft.adcs.knowledge_error_deg)
+
+    summed = cfg.copy_with(**{"spacecraft.adcs.pointing_error_combination": "sum"})
+    rssed = cfg.copy_with(**{"spacecraft.adcs.pointing_error_combination": "rss"})
+    assert adcs.pointing_margin_deg(summed) == pytest.approx(control + knowledge)
+    assert adcs.pointing_margin_deg(rssed) == pytest.approx(
+        math.hypot(control, knowledge))
+    # Worst case is never smaller than the statistical combination.
+    assert adcs.pointing_margin_deg(summed) >= adcs.pointing_margin_deg(rssed)
+
+    bogus = cfg.copy_with(**{"spacecraft.adcs.pointing_error_combination": "mean"})
+    with pytest.raises(ValueError):
+        adcs.pointing_margin_deg(bogus)
+
+
+def test_keep_outs_are_enforced_with_the_margin():
+    """The solver's answers must clear cone + margin, not just the cone.
+
+    This is the test that would catch the margin being plumbed through the
+    signature but never reaching the inequality.
+    """
+    cfg = MissionConfig()
+    env = make_env(n=16)
+    margin_deg = 8.0            # exaggerated so a miss cannot hide in rounding
+    result = geometry.solve_experiment_pointing(
+        cfg, env, n_azimuth=48, n_roll=48, pointing_margin_deg=margin_deg)
+    if not result.feasible.any():
+        pytest.skip("no feasible samples in this synthetic geometry")
+
+    sel = result.feasible
+    sun = env.sun_unit()[sel]
+    nadir = env.nadir_unit()[sel]
+    rho = env.earth_angular_radius()[sel]
+    margin = math.radians(margin_deg)
+
+    sensors = cfg.spacecraft.sensors
+    z_sun_limit = math.radians(min(float(sensors.lost_camera.sun_exclusion_deg),
+                                   float(sensors.star_tracker.sun_exclusion_deg)))
+    z_earth_limit = math.radians(float(sensors.lost_camera.earth_exclusion_deg))
+    x_sun_limit = math.radians(float(sensors.found_camera.sun_exclusion_deg))
+
+    z_sun = geometry.angle_between(result.z_axis_N[sel], sun)
+    z_earth = geometry.angle_between(result.z_axis_N[sel], nadir)
+    x_sun = geometry.angle_between(result.x_axis_N[sel], sun)
+
+    assert np.all(z_sun > z_sun_limit + margin - 1e-6)
+    assert np.all(z_earth > rho + z_earth_limit + margin - 1e-6)
+    assert np.all(x_sun > x_sun_limit + margin - 1e-6)
+    assert result.pointing_margin_deg == pytest.approx(margin_deg)
+
+
+def test_feasibility_never_increases_with_the_margin():
+    """A bigger buffer can only remove attitudes, never add them."""
+    cfg = MissionConfig()
+    env = make_env(n=24)
+    counts = [
+        geometry.solve_experiment_pointing(
+            cfg, env, n_azimuth=32, n_roll=32,
+            pointing_margin_deg=m).feasible.sum()
+        for m in (0.0, 2.0, 5.0, 10.0)
+    ]
+    assert counts == sorted(counts, reverse=True)
+
+
+def test_margin_defaults_to_the_configured_budget():
+    """Omitting the argument must not silently disable the buffer."""
+    cfg = MissionConfig()
+    env = make_env(n=12)
+    default = geometry.solve_experiment_pointing(cfg, env, n_azimuth=24, n_roll=24)
+    assert default.pointing_margin_deg == pytest.approx(
+        adcs.pointing_margin_deg(cfg))
+    assert default.pointing_margin_deg > 0.0

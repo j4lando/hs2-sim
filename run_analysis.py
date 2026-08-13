@@ -150,6 +150,11 @@ def main() -> int:
         "torque_nm_min": authority.min_max_torque_nm,
         "torque_nm_median": float(np.median(authority.max_torque_nm)),
         "slew_times": slews,
+        "control_error_deg": float(cfg.spacecraft.adcs.control_error_deg),
+        "knowledge_error_deg": float(cfg.spacecraft.adcs.knowledge_error_deg),
+        "pointing_error_combination": str(
+            cfg.spacecraft.adcs.pointing_error_combination),
+        "pointing_margin_deg": adcs.pointing_margin_deg(cfg),
         "disturbances": adcs.disturbance_summary(cfg, env, authority),
         "detumble": adcs.detumble_time_s(cfg, env, authority),
         "momentum_management": adcs.momentum_dumping_per_orbit(
@@ -349,6 +354,18 @@ def main() -> int:
         sweep_result["plus_z_decomposition"] = exclusion.plus_z_decomposition(
             cfg, env, array_by_name[reference], sweep_cfg.lost_deg,
             baseline_lost_deg=baseline_lost, n_grid=n_grid, log=log)
+        # The pointing-error buffer enters the same inequality as the cones,
+        # so it belongs in the same trade.
+        margins = sweep_cfg.pointing_margin_deg
+        log(f"  sweeping the pointing-error buffer over "
+            f"{[float(m) for m in margins]} deg...")
+        sweep_result["margin_sweep"] = exclusion.margin_sweep(
+            cfg, env, array_by_name[reference], standby_attitudes[reference],
+            authority, passes, margins, n_grid=n_grid, payload_rate_hz=rate,
+            log=log)
+        sweep_result["margin_character"] = exclusion.margin_characterise(
+            sweep_result, adcs.pointing_margin_deg(cfg))
+
         sweep_result["character"] = exclusion.characterise(sweep_result)
         results["exclusion_sweep"] = sweep_result
         log(f"  sweep took {sweep_result['runtime_s']/60:.1f} min; baseline "

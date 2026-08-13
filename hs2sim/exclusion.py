@@ -33,7 +33,7 @@ from typing import Callable, Sequence
 
 import numpy as np
 
-from . import comms, conops, geometry, power
+from . import adcs, comms, conops, geometry, power
 from .adcs import TorqueAuthority
 from .config import MissionConfig
 from .environment import EnvironmentResult
@@ -74,12 +74,20 @@ def sweep(cfg: MissionConfig,
           *,
           n_grid: int = 32,
           payload_rate_hz: float = 0.2,
+          pointing_margin_deg: float | None = None,
           log: Callable[[str], None] | None = None) -> dict:
     """Re-solve pointing and re-run the scheduler over the exclusion grid.
+
+    Every cell is solved with the pointing margin applied, so the numbers are
+    what the vehicle can actually fly rather than what the geometry would allow
+    a perfect pointer. ``pointing_margin_deg`` defaults to the configured
+    control + knowledge budget.
 
     Returns a dict with the axis values, a flat list of per-point results, and
     matrices (indexed ``[lost][found]``) of the quantities worth plotting.
     """
+    if pointing_margin_deg is None:
+        pointing_margin_deg = adcs.pointing_margin_deg(cfg)
     lost_values = [float(v) for v in lost_deg]
     found_values = [float(v) for v in found_deg]
     points: list[dict] = []
@@ -95,7 +103,8 @@ def sweep(cfg: MissionConfig,
 
             pointing = geometry.solve_experiment_pointing(
                 trial, env, n_azimuth=n_grid, n_roll=n_grid,
-                array_normals=array.normals, array_weights=array.peak_w)
+                array_normals=array.normals, array_weights=array.peak_w,
+                pointing_margin_deg=pointing_margin_deg)
             result = conops.simulate(trial, env, array, pointing, standby_dcm,
                                      authority, payload_rate_hz, passes)
             summary = conops.summarise(trial, env, result)
@@ -147,6 +156,7 @@ def sweep(cfg: MissionConfig,
         "found_deg": found_values,
         "n_grid": int(n_grid),
         "payload_rate_hz": float(payload_rate_hz),
+        "pointing_margin_deg": float(pointing_margin_deg),
         "points": points,
         "matrices": {
             "feasible_fraction": matrix("feasible_fraction"),
@@ -167,6 +177,7 @@ def plus_z_decomposition(cfg: MissionConfig,
                          *,
                          baseline_lost_deg: float,
                          n_grid: int = 32,
+                         pointing_margin_deg: float | None = None,
                          log: Callable[[str], None] | None = None) -> list[dict]:
     """Split the +z keep-out into its Sun half and its Earth half.
 
@@ -179,6 +190,8 @@ def plus_z_decomposition(cfg: MissionConfig,
     baseline FOUND exclusion. Feasibility only: the scheduler is not run,
     because the question is about the constraint, not the timeline.
     """
+    if pointing_margin_deg is None:
+        pointing_margin_deg = adcs.pointing_margin_deg(cfg)
     rows: list[dict] = []
     for value in lost_deg:
         variants = {
@@ -190,7 +203,8 @@ def plus_z_decomposition(cfg: MissionConfig,
             trial = cfg.copy_with(**overrides)
             pointing = geometry.solve_experiment_pointing(
                 trial, env, n_azimuth=n_grid, n_roll=n_grid,
-                array_normals=array.normals, array_weights=array.peak_w)
+                array_normals=array.normals, array_weights=array.peak_w,
+                pointing_margin_deg=pointing_margin_deg)
             row[f"{name}_feasible"] = float(np.mean(pointing.feasible))
             row[f"{name}_no_legal_roll"] = float(np.mean(
                 pointing.reject_reason == geometry.REJECT_NO_ROLL))
@@ -200,6 +214,149 @@ def plus_z_decomposition(cfg: MissionConfig,
                 f"{row['sun_only_feasible']*100:.1f} % feasible, Earth half "
                 f"alone {row['earth_only_feasible']*100:.1f} %")
     return rows
+
+
+def margin_sweep(cfg: MissionConfig,
+                 env: EnvironmentResult,
+                 array: power.ArrayGeometry,
+                 standby_dcm: np.ndarray,
+                 authority: TorqueAuthority,
+                 passes: Sequence[comms.Pass],
+                 margins_deg: Sequence[float],
+                 *,
+                 n_grid: int = 32,
+                 payload_rate_hz: float = 0.2,
+                 log: Callable[[str], None] | None = None) -> list[dict]:
+    """Feasibility and science as a function of the pointing-error buffer.
+
+    The exclusion angles are a payload requirement; the pointing margin is an
+    ADCS *performance* number, and it enters the same inequality. Ten degrees
+    of extra keep-out and ten degrees of pointing error cost exactly the same
+    thing, which makes this the natural companion to the cone sweep: it prices
+    ADCS work in the same currency as optical work.
+
+    The cones are held at their configured values throughout; only the buffer
+    moves.
+    """
+    rows: list[dict] = []
+    for value in margins_deg:
+        pointing = geometry.solve_experiment_pointing(
+            cfg, env, n_azimuth=n_grid, n_roll=n_grid,
+            array_normals=array.normals, array_weights=array.peak_w,
+            pointing_margin_deg=float(value))
+        result = conops.simulate(cfg, env, array, pointing, standby_dcm,
+                                 authority, payload_rate_hz, passes)
+        summary = conops.summarise(cfg, env, result)
+        rows.append({
+            "margin_deg": float(value),
+            "feasible_fraction": float(np.mean(pointing.feasible)),
+            "images_per_day_ceiling": float(
+                np.mean(pointing.feasible) * 86400.0 * payload_rate_hz
+                * int(cfg.payload.n_cameras)),
+            "images_per_day": float(summary["images_per_day"]),
+            "frac_experiment": float(summary["frac_experiment"]),
+            "energy_margin_w": float(summary["energy_margin_w"]),
+            "reject_reasons": _reject_fractions(pointing),
+        })
+        if log is not None:
+            log(f"    margin {value:.1f} deg: feasible "
+                f"{rows[-1]['feasible_fraction']*100:.1f} %, "
+                f"{rows[-1]['images_per_day']:,.0f} images/day")
+    return rows
+
+
+def margin_characterise(sweep_result: dict,
+                        baseline_margin_deg: float) -> dict:
+    """Price the pointing budget: feasibility lost per degree of error.
+
+    Also cross-checks the buffer against the cone grid. Padding every keep-out
+    by ``m`` degrees is, by construction, the same inequality as moving both
+    cones out by ``m``, so a buffer of ``m`` must reproduce the grid cell at
+    ``(baseline_lost + m, baseline_found + m)``. The two are computed by
+    different code paths -- one adds ``m`` to the angle inside the solver, the
+    other rewrites the config and re-reads it -- so agreement is a real check
+    on both.
+    """
+    rows = sweep_result.get("margin_sweep") or []
+    if len(rows) < 2:
+        return {}
+    ordered = sorted(rows, key=lambda r: r["margin_deg"])
+    zero = ordered[0]
+    out: dict = {
+        "zero_margin_feasible_fraction": zero["feasible_fraction"],
+        "zero_margin_deg": zero["margin_deg"],
+    }
+    at_baseline = next((r for r in ordered
+                        if abs(r["margin_deg"] - baseline_margin_deg) < 1e-6),
+                       None)
+    if at_baseline is not None:
+        out["baseline_margin_deg"] = at_baseline["margin_deg"]
+        out["baseline_feasible_fraction"] = at_baseline["feasible_fraction"]
+        out["baseline_images_per_day"] = at_baseline["images_per_day"]
+        span = at_baseline["margin_deg"] - zero["margin_deg"]
+        if span > 0:
+            out["cost_of_baseline_budget_pp"] = float(
+                (zero["feasible_fraction"]
+                 - at_baseline["feasible_fraction"]) * 100.0)
+            out["pp_per_deg_at_baseline"] = float(
+                out["cost_of_baseline_budget_pp"] / span)
+    # Slope over the whole swept range, and over the top half, so a knee shows.
+    total_span = ordered[-1]["margin_deg"] - zero["margin_deg"]
+    if total_span > 0:
+        out["pp_per_deg_overall"] = float(
+            (zero["feasible_fraction"] - ordered[-1]["feasible_fraction"])
+            * 100.0 / total_span)
+    mid = ordered[len(ordered) // 2]
+    upper_span = ordered[-1]["margin_deg"] - mid["margin_deg"]
+    if upper_span > 0:
+        out["pp_per_deg_upper_half"] = float(
+            (mid["feasible_fraction"] - ordered[-1]["feasible_fraction"])
+            * 100.0 / upper_span)
+
+    # Where does the buffer stop being free? Last margin still matching the
+    # zero-margin answer, and the first that does not.
+    free_to = ordered[0]["margin_deg"]
+    binds_at = None
+    for row in ordered[1:]:
+        if abs(row["feasible_fraction"] - zero["feasible_fraction"]) <= 2e-3:
+            free_to = row["margin_deg"]
+        else:
+            binds_at = row["margin_deg"]
+            break
+    out["free_up_to_deg"] = float(free_to)
+    out["binds_at_deg"] = binds_at
+
+    # -- cross-check against the cone grid -----------------------------------
+    lost = sweep_result.get("lost_deg") or []
+    found = sweep_result.get("found_deg") or []
+    grid = (sweep_result.get("matrices") or {}).get("feasible_fraction")
+    base = sweep_result.get("baseline") or {}
+    # The grid cells are themselves solved with the configured buffer, so a
+    # cell at (L, F) enforces (L + grid_margin, F + grid_margin). Forgetting
+    # that shifts the comparison by the buffer and makes an exact identity look
+    # like a 1-2 point disagreement.
+    grid_margin = float(sweep_result.get("pointing_margin_deg") or 0.0)
+    checks = []
+    if grid and "lost_deg" in base and "found_deg" in base:
+        for row in ordered:
+            m = row["margin_deg"]
+            want_lost = base["lost_deg"] + m - grid_margin
+            want_found = base["found_deg"] + m - grid_margin
+            if want_lost in lost and want_found in found:
+                cell = grid[lost.index(want_lost)][found.index(want_found)]
+                checks.append({
+                    "margin_deg": m,
+                    "equivalent_cell": [want_lost, want_found],
+                    "margin_feasible": row["feasible_fraction"],
+                    "grid_feasible": float(cell),
+                    "difference_pp": float(
+                        (row["feasible_fraction"] - cell) * 100.0),
+                })
+    out["grid_equivalence"] = checks
+    if checks:
+        out["max_equivalence_difference_pp"] = float(
+            max(abs(c["difference_pp"]) for c in checks))
+    return out
 
 
 def characterise(sweep_result: dict, feasibility_tol: float = 2e-3) -> dict:

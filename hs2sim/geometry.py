@@ -10,11 +10,19 @@ constraints simultaneously:
     neither Earth nor Sun inside that keep-out.
   * The Sun must never enter any exclusion cone.
 
+Every one of those cones is enforced with a **pointing margin** on top of the
+quoted angle. What the solver returns is a commanded attitude; the true
+boresight is somewhere within the combined control and knowledge error of it,
+in an unknown direction. An attitude sitting exactly on the star tracker's
+40 deg Sun boundary is a coin flip, not a legal attitude, so the cones are
+padded by ``adcs.pointing_margin_deg`` and the legal set shrinks from all
+sides. See ``solve_experiment_pointing`` for what is deliberately *not* padded.
+
 Because +x and +z are orthogonal, fixing the FOUND boresight still leaves one
 degree of freedom: the roll about +x. So the feasibility test is
 
     for each candidate limb azimuth  ->  is there a roll angle that clears
-    Earth and Sun out of the +z keep-out?
+    Earth and Sun out of the +z keep-out, with the pointing margin to spare?
 
 Geometry that makes this non-trivial: from 415 km the Earth disc has an
 angular radius of about 70 deg, so pointing at the limb already puts +x about
@@ -66,6 +74,7 @@ class PointingResult:
     roll_used: np.ndarray       # (N,) roll about +x that was selected, radians
     array_power_frac: np.ndarray  # (N,) cosine factor achieved by the array
     reject_reason: np.ndarray   # (N,) int code, see REJECT_* below
+    pointing_margin_deg: float = 0.0   # buffer the keep-outs were padded with
 
 
 REJECT_OK = 0
@@ -108,7 +117,9 @@ def solve_experiment_pointing(cfg: MissionConfig,
                               n_roll: int = 72,
                               array_normals: np.ndarray | None = None,
                               array_weights: np.ndarray | None = None,
-                              power_tolerance: float = 0.95) -> PointingResult:
+                              power_tolerance: float = 0.95,
+                              pointing_margin_deg: float | None = None
+                              ) -> PointingResult:
     """Find, for every sample, a legal experiment attitude (if one exists).
 
     When several attitudes are legal we pick the one that puts the most power
@@ -118,18 +129,44 @@ def solve_experiment_pointing(cfg: MissionConfig,
     ``array_normals`` (K,3) and ``array_weights`` (K,) describe the array in
     body coordinates; if omitted, feasibility is still computed and the power
     fraction is reported as zero.
+
+    ``pointing_margin_deg`` pads every keep-out. The attitude this function
+    returns is a *commanded* attitude; the true boresight sits somewhere within
+    the combined control and knowledge error of it, in an unknown direction. An
+    attitude that puts the Sun exactly on the star tracker's 40 deg boundary is
+    therefore a 50/50 bet, not a legal attitude. Padding the cones by the
+    pointing error is what makes the answer flyable. Defaults to
+    ``adcs.pointing_margin_deg(cfg)``; pass 0.0 to get the unbuffered geometric
+    answer.
+
+    Not padded, deliberately:
+
+    * **FOUND's field of view.** The boresight is placed exactly on the limb
+      cone, and the FOV is 74 deg full -- the limb stays 36 deg inside the
+      frame edge, which swamps any plausible pointing error.
+    * **The terminator margin** in the sunlit test. That margin is about not
+      imaging the day/night boundary itself; near the limb the line of sight
+      grazes the surface, so boresight error maps to along-track motion of the
+      aim point at a rate that has nothing to do with the cone geometry.
+      Padding it by the pointing error would look rigorous and mean nothing.
     """
+    from .adcs import pointing_margin_deg as _default_margin
+
     sensors = cfg.spacecraft.sensors
     found = sensors.found_camera
     lost = sensors.lost_camera
     tracker = sensors.star_tracker
 
-    sun_excl_found = math.radians(float(found.sun_exclusion_deg))
+    if pointing_margin_deg is None:
+        pointing_margin_deg = _default_margin(cfg)
+    margin = math.radians(float(pointing_margin_deg))
+
+    sun_excl_found = math.radians(float(found.sun_exclusion_deg)) + margin
     # +z carries both LOST and the star tracker; take the tighter keep-out.
     sun_excl_z = math.radians(min(float(lost.sun_exclusion_deg),
-                                  float(tracker.sun_exclusion_deg)))
+                                  float(tracker.sun_exclusion_deg))) + margin
     earth_excl_z = math.radians(min(float(lost.earth_exclusion_deg),
-                                    float(tracker.earth_exclusion_deg)))
+                                    float(tracker.earth_exclusion_deg))) + margin
 
     n_samples = env.n_samples
     sun_hat = env.sun_unit()                 # (N,3)
@@ -269,6 +306,7 @@ def solve_experiment_pointing(cfg: MissionConfig,
         roll_used=best_roll,
         array_power_frac=best_power,
         reject_reason=reject,
+        pointing_margin_deg=float(pointing_margin_deg),
     )
 
 

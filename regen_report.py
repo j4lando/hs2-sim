@@ -19,7 +19,7 @@ from __future__ import annotations
 
 import json
 
-from hs2sim import exclusion, report
+from hs2sim import adcs, exclusion, report
 from hs2sim.config import MissionConfig, RESULTS_DIR
 
 
@@ -32,6 +32,9 @@ def main() -> int:
     sweep = results.get("exclusion_sweep")
     if sweep is not None:
         sweep["character"] = exclusion.characterise(sweep)
+        if sweep.get("margin_sweep"):
+            sweep["margin_character"] = exclusion.margin_characterise(
+                sweep, adcs.pointing_margin_deg(cfg))
         baseline = sweep.get("baseline", {})
         if "lost_deg" in baseline and "found_deg" in baseline:
             baseline.update(exclusion.sensitivity(
@@ -44,6 +47,7 @@ def main() -> int:
         import matplotlib.pyplot as plt
         from hs2sim import plots
         plots._exclusion_heatmaps(sweep, RESULTS_DIR, plt)
+        plots._margin_curve(sweep, RESULTS_DIR, plt)
         print(f"wrote {RESULTS_DIR / 'exclusion_sweep.png'}")
 
     report.write_report(cfg, results, RESULTS_DIR / "report.md")

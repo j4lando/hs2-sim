@@ -88,6 +88,33 @@ the parts, because the two keep-outs exclude different arcs of the roll circle
 and only their union leaves nothing behind. If the +z keep-out has to grow,
 growing one half is survivable and growing both is not.
 
+### The pointing-error buffer
+
+Every keep-out is enforced with a buffer on top of the quoted angle, because
+what the solver returns is a *commanded* attitude — the true boresight sits
+somewhere within the control and knowledge error of it, in an unknown
+direction. An attitude putting the Sun exactly on the star tracker's 40 deg
+boundary is a coin flip, not a legal attitude. The buffer is
+`control_error_deg + knowledge_error_deg` from `config/spacecraft.yaml`
+(1.0 + 0.1 = 1.1 deg as configured; `pointing_error_combination: rss` if you
+prefer the statistical combination), and it is swept alongside the cones
+because it enters exactly the same inequality — a degree of pointing error and
+a degree of extra keep-out cost the mission the same thing.
+
+The result is that the buffer is **free at its current size**: feasibility is
+unchanged out to 10 deg of pointing error and only starts to move past that.
+That is the +z slack spent on pointing instead of on keep-out, so there is no
+science argument for tightening the ADCS budget below 1.1 deg — the geometry
+cannot tell the difference.
+
+Two things are deliberately *not* buffered, and the reasoning is in
+`solve_experiment_pointing`: FOUND's field of view (the limb sits 36 deg inside
+the frame edge, which swamps any plausible pointing error) and the terminator
+margin in the sunlit test (near the limb the line of sight grazes the surface,
+so boresight error maps to along-track motion of the aim point at a rate that
+has nothing to do with the cone geometry — padding it would look rigorous and
+mean nothing).
+
 One thing to know before reading the output. Three quantities are reported and
 they are not equally trustworthy:
 
@@ -138,6 +165,8 @@ These are the numbers most likely to change your answers. All are in `config/`.
 | Surface optical properties | α/ε per surface | Drives the single-node temperature more than anything else. Handbook values; replace with coupon data. |
 | Specific heat | 850 J/kg/K | Sets the thermal time constant, and hence the size of the orbital temperature swing. |
 | MT01 dipole moment | 0.20 A m² | Not clearly published. CR0002 is confirmed at 0.20 A m². |
+| Control error | 1.0 deg | Buffers every keep-out, so it is a direct tax on science time. Magnetorquer-only control on a 3U; verify against your ADCS analysis. |
+| Knowledge error | 0.1 deg | Sagitta is arcsec-class on its own; 0.1 deg allows for mounting alignment and thermal drift. |
 | Heater duty cycle | swept | Explicitly untrusted. |
 | USB 2.0 bulk efficiency | 60 % of 480 Mb/s | Sets the payload frame-rate ceiling. |
 | Residual dipole | 0.005 A m² | Drives the disturbance torque the magnetorquers must fight. |

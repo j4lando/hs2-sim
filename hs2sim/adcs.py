@@ -33,6 +33,41 @@ from .environment import EnvironmentResult, MU_EARTH
 MU0 = 4e-7 * math.pi
 
 
+def pointing_margin_deg(cfg: MissionConfig) -> float:
+    """Buffer every keep-out has to be enforced with, in degrees.
+
+    A commanded attitude sitting exactly on a keep-out boundary is not safe.
+    Two independent things move the real boresight away from where the flight
+    software believes it is:
+
+    * **Control error** -- the true attitude differs from the commanded one.
+      Magnetorquers produce ``m x B`` and so have no authority about the field
+      direction; the vehicle is instantaneously under-actuated and this term
+      dominates.
+    * **Knowledge error** -- the estimated attitude differs from the true one,
+      set by the star tracker and its mounting alignment.
+
+    Both push the same way as far as a keep-out is concerned: the true
+    boresight can be anywhere within their combination of where the estimate
+    says it is, in *any* direction. So the cone is enforced at
+    ``exclusion + margin`` and the usable attitude set shrinks from every side.
+
+    ``sum`` is the worst case and the default, because the requirement is
+    stated absolutely rather than statistically. ``rss`` treats the two as
+    independent random errors instead.
+    """
+    adcs_cfg = cfg.spacecraft.adcs
+    control = float(adcs_cfg.control_error_deg)
+    knowledge = float(adcs_cfg.knowledge_error_deg)
+    rule = str(getattr(adcs_cfg, "pointing_error_combination", "sum")).lower()
+    if rule == "rss":
+        return math.hypot(control, knowledge)
+    if rule == "sum":
+        return control + knowledge
+    raise ValueError(
+        f"pointing_error_combination must be 'sum' or 'rss', got {rule!r}")
+
+
 @dataclasses.dataclass
 class TorqueAuthority:
     """Achievable control torque statistics over the propagation."""

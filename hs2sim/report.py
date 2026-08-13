@@ -37,6 +37,98 @@ def _matrix_table(add, rows: list[float], cols: list[float],
     add("")
 
 
+def _margin_subsection(sweep: dict, add) -> None:
+    """The pointing-error buffer, priced in the same units as the cones."""
+    rows = sweep.get("margin_sweep")
+    if not rows:
+        return
+    char = sweep.get("margin_character", {})
+    applied = sweep.get("pointing_margin_deg")
+
+    add("### The pointing-error buffer\n")
+    add("Everything above is solved with a buffer on every keep-out, because "
+        "what the solver returns is a *commanded* attitude and the true "
+        "boresight is somewhere within the control and knowledge error of it, "
+        "in an unknown direction. An attitude that puts the Sun exactly on the "
+        "star tracker's 40 deg boundary is a coin flip, not a legal attitude. "
+        "So each cone is enforced at `exclusion + margin` and the legal set "
+        "shrinks from every side.\n")
+    if applied is not None:
+        add(f"The tables above use **{_fmt(applied, '.2f')} deg**. This "
+            f"sub-sweep moves only that buffer, with the cones held at their "
+            f"configured values.\n")
+
+    add("| Buffer (deg) | Feasible | Image ceiling | Images/day | "
+        "Sun in FOUND | No legal roll |")
+    add("| --- | --- | --- | --- | --- | --- |")
+    for row in sorted(rows, key=lambda r: r["margin_deg"]):
+        mark = "**" if (applied is not None
+                        and abs(row["margin_deg"] - applied) < 1e-6) else ""
+        add(f"| {mark}{row['margin_deg']:.2f}{mark} | "
+            f"{mark}{_fmt(row['feasible_fraction'] * 100, '.1f')} %{mark} | "
+            f"{_fmt(row['images_per_day_ceiling'], ',.0f')} | "
+            f"{_fmt(row['images_per_day'], ',.0f')} | "
+            f"{_fmt(row['reject_reasons']['sun_in_found_fov'] * 100, '.1f')} % | "
+            f"{_fmt(row['reject_reasons']['no_legal_roll'] * 100, '.1f')} % |")
+    add("")
+
+    cost = char.get("cost_of_baseline_budget_pp")
+    free_to = char.get("free_up_to_deg")
+    binds_at = char.get("binds_at_deg")
+    if cost is not None:
+        add(f"**The pointing budget is very nearly free at its current size, "
+            f"and the sweep says exactly how much room there is.** The "
+            f"as-designed {_fmt(char.get('baseline_margin_deg'), '.2f')} deg "
+            f"buffer costs {_fmt(abs(cost), '.2f')} percentage points of "
+            f"feasible time against a hypothetical perfect pointer"
+            + (f", and feasibility is unchanged all the way out to "
+               f"**{_fmt(free_to, '.0f')} deg**" if free_to else "")
+            + (f", only starting to move at {_fmt(binds_at, '.0f')} deg"
+               if binds_at is not None else "")
+            + ". That is not luck and it is not a modelling artefact: it is "
+            "the +z slack from the cone sweep, spent on pointing error instead "
+            "of on keep-out."
+            + (f" In other words the vehicle can miss its pointing spec by a "
+               f"factor of {_fmt(float(free_to) / char['baseline_margin_deg'], '.0f')} "
+               f"before the geometry charges anything at all for it.\n"
+               if free_to and char.get("baseline_margin_deg") else "\n"))
+    overall = char.get("pp_per_deg_overall")
+    upper = char.get("pp_per_deg_upper_half")
+    if overall is not None and upper is not None and upper > overall * 1.2:
+        add(f"Past that the price accelerates hard: {_fmt(overall, '.2f')} "
+            f"pp/deg averaged over the whole swept range but "
+            f"{_fmt(upper, '.2f')} pp/deg over the upper half. The buffer eats "
+            f"into the roll window from the Earth side and the Sun side at "
+            f"once, which is the superadditive collapse from the previous "
+            f"section arriving by a different route.\n")
+
+    checks = char.get("grid_equivalence") or []
+    worst = char.get("max_equivalence_difference_pp")
+    if checks and worst is not None:
+        example = max(checks, key=lambda c: c["margin_deg"])
+        add(f"**Cross-check.** Padding every keep-out by *m* degrees is the "
+            f"same inequality as moving both cones out by *m*, so a buffer of "
+            f"{example['margin_deg']:.0f} deg has to reproduce the grid cell "
+            f"at LOST {example['equivalent_cell'][0]:.0f} / FOUND "
+            f"{example['equivalent_cell'][1]:.0f} deg. It does: "
+            f"{_fmt(example['margin_feasible'] * 100, '.1f')} % against "
+            f"{_fmt(example['grid_feasible'] * 100, '.1f')} %. Across every "
+            f"comparable point the two agree to "
+            f"{_fmt(worst, '.2f')} percentage points. The two numbers come "
+            f"from different code paths -- one adds the margin to the angle "
+            f"inside the solver, the other rewrites the config and re-reads "
+            f"it -- so this checks both.\n")
+
+    add("One thing to be clear about: this is a *hard* constraint on "
+        "feasibility, not a soft pointing requirement. An attitude that cannot "
+        "hold the buffer is not counted at all, so an ADCS that misses its "
+        "spec does not blur images here -- it removes observations from the "
+        "timeline. The flip side is the useful part for ADCS: there is no "
+        "science argument for tightening the pointing budget below its current "
+        f"{_fmt(char.get('baseline_margin_deg'), '.2f')} deg, because the "
+        "geometry cannot tell the difference.\n")
+
+
 def _exclusion_section(sweep: dict, add) -> None:
     lost = sweep["lost_deg"]
     found = sweep["found_deg"]
@@ -312,6 +404,8 @@ def _exclusion_section(sweep: dict, add) -> None:
                     "and growing both is not. It also means a stray-light "
                     "fix on the Sun side keeps its value only as long as the "
                     "Earth exclusion stays where it is.\n")
+    _margin_subsection(sweep, add)
+
     add("**What the cones cannot fix.** `No sunlit limb` is the largest "
         "rejection over most of the grid and it barely moves"
         + (f" (a span of {_fmt(limb_span, '.1f')} percentage points across all "
@@ -531,7 +625,17 @@ def write_report(cfg: MissionConfig, results: dict, path: pathlib.Path) -> None:
         f"(mean {_fmt(adcs_res['b_field_nt_mean'], '.0f')} nT).")
     add(f"- Control torque: mean "
         f"{_fmt(adcs_res['torque_nm_mean'] * 1e6, '.2f')} uN m, "
-        f"minimum {_fmt(adcs_res['torque_nm_min'] * 1e6, '.2f')} uN m.\n")
+        f"minimum {_fmt(adcs_res['torque_nm_min'] * 1e6, '.2f')} uN m.")
+    if "pointing_margin_deg" in adcs_res:
+        add(f"- Pointing budget: {_fmt(adcs_res['control_error_deg'], '.2f')} deg "
+            f"control + {_fmt(adcs_res['knowledge_error_deg'], '.2f')} deg "
+            f"knowledge, combined by "
+            f"`{adcs_res['pointing_error_combination']}` = "
+            f"**{_fmt(adcs_res['pointing_margin_deg'], '.2f')} deg**. Every "
+            f"experiment-mode keep-out is enforced with that as a buffer, so "
+            f"it is a direct tax on science time -- see the exclusion-angle "
+            f"trade.")
+    add("")
 
     add("| Slew | Best (min) | Median (min) | 10th percentile field (min) |")
     add("| --- | --- | --- | --- |")

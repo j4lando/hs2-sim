@@ -137,6 +137,47 @@ def make_all(cfg: MissionConfig, env: EnvironmentResult,
     # -- exclusion-angle trade -----------------------------------------------
     if "exclusion_sweep" in results:
         _exclusion_heatmaps(results["exclusion_sweep"], out_dir, plt)
+        _margin_curve(results["exclusion_sweep"], out_dir, plt)
+
+
+def _margin_curve(sweep: dict, out_dir: pathlib.Path, plt) -> None:
+    """Feasibility against the pointing-error buffer."""
+    rows = sorted(sweep.get("margin_sweep") or [], key=lambda r: r["margin_deg"])
+    if len(rows) < 2:
+        return
+    margin = [r["margin_deg"] for r in rows]
+    feasible = [r["feasible_fraction"] * 100 for r in rows]
+    no_roll = [r["reject_reasons"]["no_legal_roll"] * 100 for r in rows]
+    sun_found = [r["reject_reasons"]["sun_in_found_fov"] * 100 for r in rows]
+    applied = sweep.get("pointing_margin_deg")
+
+    fig, (ax, ax2) = plt.subplots(1, 2, figsize=(10.5, 4.2))
+    ax.plot(margin, feasible, "o-", color="#3d7ea8")
+    ax.set_xlabel("Pointing-error buffer (deg)")
+    ax.set_ylabel("Legal attitude exists (%)")
+    ax.set_title("Cost of the pointing budget", fontsize=10)
+    ax.grid(alpha=0.3)
+    ax.set_ylim(bottom=0)
+
+    # Stacked rejections: which constraint the buffer pushes samples into.
+    ax2.stackplot(margin, sun_found, no_roll,
+                  labels=["Sun in FOUND", "no legal roll"],
+                  colors=["#e8a33d", "#c0554e"])
+    ax2.set_xlabel("Pointing-error buffer (deg)")
+    ax2.set_ylabel("Rejected timeline (%)")
+    ax2.set_title("Which constraint the buffer trips", fontsize=10)
+    ax2.legend(fontsize=8, loc="upper left")
+    ax2.grid(alpha=0.3)
+
+    if applied is not None:
+        for axis in (ax, ax2):
+            axis.axvline(applied, color="#4e9a51", ls="--", lw=1.2)
+            axis.annotate(f"as designed\n{applied:.2f} deg", (applied, 0),
+                          xytext=(4, 6), textcoords="offset points",
+                          fontsize=7, color="#4e9a51")
+    fig.tight_layout()
+    fig.savefig(out_dir / "pointing_margin.png", dpi=140)
+    plt.close(fig)
 
 
 def _exclusion_heatmaps(sweep: dict, out_dir: pathlib.Path, plt) -> None:

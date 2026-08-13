@@ -204,8 +204,31 @@ adcs:
     # EXA MT01 compact magnetorquer. Dipole is not published clearly; 0.20
     # A m^2 assumed so the three axes are balanced. [assumed] -- sweep this.
     - {name: MT01_z,   axis: [0, 0, 1], dipole_am2: 0.20, power_w: 1.75}
-  # Pointing performance targets.
-  pointing_accuracy_deg: 1.0     # [assumed] achievable with star tracker + MTQ
+  # Pointing performance. Two physically distinct errors, and the experiment
+  # constraints need both of them:
+  #
+  #   control_error_deg   - how far the TRUE attitude sits from the COMMANDED
+  #                         one. Magnetorquers produce m x B, so no torque is
+  #                         available about the field direction at all; the
+  #                         vehicle is instantaneously under-actuated and this
+  #                         is by far the dominant term.
+  #   knowledge_error_deg - how far the ESTIMATED attitude sits from the TRUE
+  #                         one. Set by the star tracker while it has a lock,
+  #                         which in experiment mode the keep-outs guarantee.
+  #
+  # A commanded attitude that sits exactly on a keep-out boundary is not
+  # actually safe: the true boresight can be anywhere within these errors of
+  # where the estimator thinks it is. So every keep-out is enforced with the
+  # combined error as a buffer -- see `hs2sim.adcs.pointing_margin_deg`.
+  control_error_deg: 1.0         # [assumed] magnetorquer-only 3U control
+  knowledge_error_deg: 0.1       # [assumed] Sagitta is arcsec-class on its own;
+                                 # 0.1 deg allows for mounting alignment and
+                                 # thermal drift of the bracket
+  # How the two combine. 'sum' is the worst case and is the default because the
+  # requirement is absolute ("the Sun may not enter the exclusion angle"), not
+  # statistical. 'rss' is the 1-sigma combination if you prefer to treat them
+  # as independent random errors. At these values the two differ by 0.1 deg.
+  pointing_error_combination: sum
   settle_margin: 1.30            # [assumed] slews take 30 % longer than the
                                  # time-optimal bang-bang estimate
   initial_tumble_rate_dps: 10.0  # [assumed] typical post-deployment rate

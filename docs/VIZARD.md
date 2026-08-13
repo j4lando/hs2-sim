@@ -161,6 +161,12 @@ the cone becomes **solid**. It is a subtle change and easy to miss with the
 station cones also on screen — turn the ground-station cones off under
 `Edit Location` if you want to watch it clearly.
 
+**The drawn cones are the requirement, not what the solver enforced.** Every
+keep-out is enforced with the pointing-error buffer on top (1.1 deg as
+configured — see `adcs.pointing_margin_deg`), so in experiment mode the flown
+attitude clears each cone by that much and you should never see the Sun or
+Earth graze a cone edge. If one ever does graze, that is a finding.
+
 The cones are drawn at spacecraft scale (12 m, set by `vizard.cone_height_m`
 in `config/mission.yaml`), matching the convention in Basilisk's own examples.
 Drawing them out to orbit altitude makes them fill the screen and hide
