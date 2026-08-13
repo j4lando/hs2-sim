@@ -72,6 +72,22 @@ requirement quotes a single angle for both and the star tracker shares that
 face. `FOUND` moves FOUND's Sun keep-out only — its 74 deg field of view is an
 optical property and does not move.
 
+The LOST axis runs to 80 deg on purpose: that is where the geometry has to
+break. Fixing FOUND on the limb puts +x about 70 deg off nadir, and +z is
+perpendicular to +x, so +z can only reach between 20 and 160 deg from nadir.
+The Earth keep-out demands more than (70 + LOST) deg of that range, so the
+roll freedom closes completely at LOST = 90 deg regardless of anything else.
+The sweep brackets that cliff — feasibility is flat at 49.4 % out to 50 deg,
+then falls to 45.4 / 32.8 / 21.0 % at 60 / 70 / 80 deg.
+
+The most useful result is what happens when the two halves of the +z cone are
+moved separately. At 80 deg, widening *only* the Sun exclusion leaves 45.4 %
+feasible and widening *only* the Earth exclusion leaves 45.3 % — a few points
+each. Move both together and it collapses to 21.0 %, far worse than the sum of
+the parts, because the two keep-outs exclude different arcs of the roll circle
+and only their union leaves nothing behind. If the +z keep-out has to grow,
+growing one half is survivable and growing both is not.
+
 One thing to know before reading the output. Three quantities are reported and
 they are not equally trustworthy:
 

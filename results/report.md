@@ -106,6 +106,8 @@ This is the constraint's own effect, and it is the number to trade on: a determi
 | **LOST 40 deg** | 53.5 | 51.5 | **49.4** | 49.1 | 47.1 |
 | **LOST 50 deg** | 53.5 | 51.5 | 49.4 | 49.1 | 47.1 |
 | **LOST 60 deg** | 49.5 | 47.5 | 45.4 | 45.1 | 43.1 |
+| **LOST 70 deg** | 36.9 | 34.9 | 32.8 | 32.5 | 30.5 |
+| **LOST 80 deg** | 25.0 | 23.0 | 21.0 | 20.6 | 18.6 |
 
 ### 2. Image ceiling at this cadence
 
@@ -118,6 +120,8 @@ The same matrix in mission units: feasible time x 0.20 Hz x 2 cameras, i.e. what
 | **LOST 40 deg** | 18,478 | 17,796 | **17,074** | 16,966 | 16,262 |
 | **LOST 50 deg** | 18,478 | 17,796 | 17,074 | 16,966 | 16,262 |
 | **LOST 60 deg** | 17,102 | 16,421 | 15,698 | 15,590 | 14,886 |
+| **LOST 70 deg** | 12,744 | 12,062 | 11,340 | 11,232 | 10,528 |
+| **LOST 80 deg** | 8,647 | 7,966 | 7,243 | 7,135 | 6,431 |
 
 ### 3. Images actually collected
 
@@ -130,6 +134,8 @@ What survives after slews, downlink passes and battery holds take their share. R
 | **LOST 40 deg** | 5,958 | 5,745 | **5,639** | 5,549 | 5,495 |
 | **LOST 50 deg** | 6,201 | 5,775 | 5,254 | 5,181 | 4,975 |
 | **LOST 60 deg** | 5,061 | 4,827 | 4,524 | 4,290 | 4,513 |
+| **LOST 70 deg** | 4,403 | 4,163 | 3,878 | 3,691 | 3,536 |
+| **LOST 80 deg** | 2,312 | 2,190 | 1,957 | 1,851 | 1,839 |
 
 **Read table 3 with care.** Several cells in it share an *identical* feasibility -- the +z cone does nothing at all over part of its range -- yet their realised image counts differ by up to 577 images/day (11 %). That spread is not the cone doing anything. Changing a keep-out changes which rolls are legal, which changes the attitude the solver picks among equally legal options, which changes where the large repoints land; with ~50 % of the timeline in slew, that is a big lever and it is essentially chaotic. Treat 577 images/day as the noise floor of table 3, and trade on tables 1 and 2 instead.
 
@@ -144,6 +150,8 @@ A looser cone is not free: more experiment time means less sun-pointing, and the
 | **LOST 40 deg** | +0.63 | +0.87 | **+1.13** | +1.13 | +1.33 |
 | **LOST 50 deg** | +0.63 | +0.78 | +0.99 | +0.97 | +1.14 |
 | **LOST 60 deg** | +0.59 | +0.79 | +1.03 | +1.03 | +1.37 |
+| **LOST 70 deg** | +1.18 | +1.28 | +1.53 | +1.54 | +1.77 |
+| **LOST 80 deg** | +1.54 | +1.76 | +2.06 | +2.07 | +2.40 |
 
 ### Sensitivity at the baseline
 
@@ -158,15 +166,49 @@ One-sided differences to the neighbouring grid points, on the ceiling of table 2
 
 ### What the sweep says
 
-**The whole trade is worth about 21 % of the science.** Over the full grid, feasible time runs from 43.1 % (LOST 60 deg / FOUND 90 deg) to 53.5 % (LOST 20 / FOUND 50), against 49.4 % at the baseline -- so the best case is worth +8 % and the worst costs -13 %. That is a real but bounded quantity: no achievable cone doubles the science, because the binding limit is elsewhere.
+**The trade is sharply asymmetric: there is little to win and a lot to lose.** Over the full grid, feasible time runs from 18.6 % (LOST 80 deg / FOUND 90 deg) to 53.5 % (LOST 20 / FOUND 50), against 49.4 % at the baseline. Relaxing both cones as far as the grid goes is worth only +8 %, because the dominant loss is not stray light at all; tightening them as far as the grid goes costs -62 %. The baseline sits close to the good end already, so the engineering question is not how to gain science by loosening -- it is how much margin exists before the geometry starts taking science away.
 
-**The +z keep-out has slack, and the sweep says how much.** Feasibility is identical for every LOST value up to **50 deg** -- the rows of table 1 are the same to within rounding. The baseline is 40 deg, so the star tracker and LOST could give up 10 deg of keep-out at zero cost in science. The reason is geometric: pointing FOUND at a limb already throws +z more than 110 deg off nadir, so Earth is nowhere near the +z cone and only the Sun can violate it. By 60 deg the Sun does catch it and feasibility falls off; that is the knee, and it sits 20 deg above the baseline.
+**The +z keep-out has slack, and the sweep says how much.** Feasibility is identical for every LOST value up to **50 deg** -- the rows of table 1 are the same to within rounding. The baseline is 40 deg, so the star tracker and LOST could give up 10 deg of keep-out at zero cost in science. The reason is that the roll about +x is a free parameter: fixing FOUND on the limb leaves a whole circle of +z directions to choose from, and up to 50 deg there is always some arc of it that clears both Earth and Sun. At 60 deg that arc starts to close, which is the knee -- 20 deg above the baseline.
 
 **FOUND's Sun keep-out is the one that costs.** Averaged over the swept range, every degree of FOUND exclusion is worth about 0.16 percentage points of feasible time, or roughly 55 images/day per degree at 0.20 Hz. If there is baffle or stray-light work to be done, this is the only axis on which it pays.
 
 That average is not a straight line, though, and the structure matters if you are negotiating a specific number. The price per degree ranges from 0.03 pp/deg over 70-80 deg -- effectively free -- to 0.21 pp/deg over 60-70 deg. The cheap steps are the ones where the excluded solid angle was already pointing at sky the sunlit limb never occupies.
 
-**What the cones cannot fix.** The dominant rejection is `no sunlit limb`, and it does not move anywhere on the grid: it is eclipse and orbital geometry, not stray light. That is the floor the trade runs into, and it is why even the loosest corner of the grid leaves roughly half the timeline unusable for science.
+### Why the rejected samples are rejected
+
+Feasibility alone does not say *which* constraint bit, and on this grid the answer changes. Percentages of the whole timeline, at the baseline FOUND = 70 deg column.
+
+| LOST | No sunlit limb | Sun in FOUND | No legal roll |
+| --- | --- | --- | --- |
+| 20 deg | 41.7 % | 8.9 % | 0.0 % |
+| 30 deg | 41.7 % | 8.9 % | 0.0 % |
+| 40 deg | 41.7 % | 8.9 % | 0.0 % |
+| 50 deg | 41.7 % | 8.9 % | 0.0 % |
+| 60 deg | 41.7 % | 8.9 % | 4.0 % |
+| 70 deg | 41.7 % | 8.9 % | 16.6 % |
+| 80 deg | 41.7 % | 8.9 % | 28.4 % |
+
+**The +z cone does eventually bind, and it binds hard.** `No legal roll` is exactly zero over the whole baseline range and then climbs to 28.4 % of the timeline at LOST 80 deg / FOUND 50 deg, overtaking FOUND's Sun keep-out as the dominant rejection from LOST 70 deg upward. Where the wall sits is set by the orbit, not by the instrument: fixing FOUND on the limb puts +x about 70 deg off nadir, and +z is perpendicular to +x, so +z can only reach between 20 and 160 deg from nadir. The Earth keep-out demands more than (70 + LOST) deg of that range, so the roll freedom closes completely at LOST = 90 deg no matter what else is true. The sweep is watching that margin run out.
+
+### Which half of the +z cone is spending it
+
+The requirement quotes one angle covering both Sun and Earth, so the sweep above moves them together. That is faithful to the requirement but not actionable: a baffle or a lens hood buys you the Sun exclusion, and nothing whatsoever buys you the Earth one. Below, each half is moved on its own with the other held at 40 deg, at the baseline FOUND exclusion.
+
+| LOST | Sun half alone | Earth half alone | Both together |
+| --- | --- | --- | --- |
+| 20 deg | 49.4 % | 49.4 % | 49.4 % |
+| 30 deg | 49.4 % | 49.4 % | 49.4 % |
+| 40 deg | 49.4 % | 49.4 % | 49.4 % |
+| 50 deg | 49.4 % | 49.4 % | 49.4 % |
+| 60 deg | 49.4 % | 49.4 % | 45.4 % |
+| 70 deg | 49.2 % | 49.3 % | 32.8 % |
+| 80 deg | 45.4 % | 45.3 % | 21.0 % |
+
+**Neither half is expensive on its own. The pair is.** At LOST 80 deg, widening only the Sun exclusion leaves 45.4 % feasible and widening only the Earth exclusion leaves 45.3 % -- each costing a few points against the 49.4 % baseline. Move both and it collapses to 21.0 %, far worse than the sum of the parts.
+
+The mechanism is that the two keep-outs exclude *different* arcs of the roll circle. Separately, each leaves a usable arc behind. Together the arcs overlap enough to leave nothing, and the sample is lost. This is the practically useful result of the whole sweep: if the +z keep-out has to grow, growing one half is survivable and growing both is not. It also means a stray-light fix on the Sun side keeps its value only as long as the Earth exclusion stays where it is.
+
+**What the cones cannot fix.** `No sunlit limb` is the largest rejection over most of the grid and it barely moves (a span of 0.0 percentage points across all 35 cells): it is eclipse and orbital geometry, not stray light. That is the floor the trade runs into, and it is why even the loosest corner of the grid leaves roughly half the timeline unusable for science.
 
 ## Surface illumination (thermal inputs)
 

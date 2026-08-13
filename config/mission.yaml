@@ -66,8 +66,14 @@ analysis:
   #
   # Both lists include the baseline (40, 70) so the sweep contains a direct
   # comparison point against the headline run.
+  # The LOST axis runs to 80 deg because that is where the geometry has to
+  # break. Pointing FOUND at the limb fixes +x at the Earth angular radius
+  # (~70 deg off nadir), and +z is perpendicular to it, so +z can reach at most
+  # 90 + 70 = 160 deg from nadir. The Earth keep-out needs +z more than
+  # (70 + lost_deg) from nadir, so at lost_deg = 90 there is no legal roll at
+  # all and feasibility must hit zero. Sweeping to 80 brackets that cliff.
   exclusion_sweep:
-    lost_deg: [20, 30, 40, 50, 60]
+    lost_deg: [20, 30, 40, 50, 60, 70, 80]
     found_deg: [50, 60, 70, 80, 90]
     # The pointing search is re-run for every grid point, so it uses a coarser
     # azimuth/roll grid than the headline run. 32 gives ~11 deg resolution,

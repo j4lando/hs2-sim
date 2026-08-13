@@ -40,12 +40,15 @@ from .environment import EnvironmentResult
 
 # Dotted config paths the sweep overrides. The +z group moves together for the
 # reason given in the module docstring.
-LOST_PATHS = (
+LOST_SUN_PATHS = (
     "spacecraft.sensors.lost_camera.sun_exclusion_deg",
-    "spacecraft.sensors.lost_camera.earth_exclusion_deg",
     "spacecraft.sensors.star_tracker.sun_exclusion_deg",
+)
+LOST_EARTH_PATHS = (
+    "spacecraft.sensors.lost_camera.earth_exclusion_deg",
     "spacecraft.sensors.star_tracker.earth_exclusion_deg",
 )
+LOST_PATHS = LOST_SUN_PATHS + LOST_EARTH_PATHS
 FOUND_PATH = "spacecraft.sensors.found_camera.sun_exclusion_deg"
 
 
@@ -157,6 +160,48 @@ def sweep(cfg: MissionConfig,
     }
 
 
+def plus_z_decomposition(cfg: MissionConfig,
+                         env: EnvironmentResult,
+                         array: power.ArrayGeometry,
+                         lost_deg: Sequence[float],
+                         *,
+                         baseline_lost_deg: float,
+                         n_grid: int = 32,
+                         log: Callable[[str], None] | None = None) -> list[dict]:
+    """Split the +z keep-out into its Sun half and its Earth half.
+
+    The main sweep moves both together, because that is how the requirement is
+    written. But "the +z cone costs 28 points of feasibility at 80 deg" is not
+    an actionable statement until you know *which* half is spending it -- a
+    baffle helps the Sun exclusion, and nothing helps the Earth one.
+
+    So each is moved on its own, with the other held at the baseline, at the
+    baseline FOUND exclusion. Feasibility only: the scheduler is not run,
+    because the question is about the constraint, not the timeline.
+    """
+    rows: list[dict] = []
+    for value in lost_deg:
+        variants = {
+            "sun_only": {p: float(value) for p in LOST_SUN_PATHS},
+            "earth_only": {p: float(value) for p in LOST_EARTH_PATHS},
+        }
+        row: dict = {"lost_deg": float(value)}
+        for name, overrides in variants.items():
+            trial = cfg.copy_with(**overrides)
+            pointing = geometry.solve_experiment_pointing(
+                trial, env, n_azimuth=n_grid, n_roll=n_grid,
+                array_normals=array.normals, array_weights=array.peak_w)
+            row[f"{name}_feasible"] = float(np.mean(pointing.feasible))
+            row[f"{name}_no_legal_roll"] = float(np.mean(
+                pointing.reject_reason == geometry.REJECT_NO_ROLL))
+        rows.append(row)
+        if log is not None:
+            log(f"    LOST {value:.0f} deg: Sun half alone "
+                f"{row['sun_only_feasible']*100:.1f} % feasible, Earth half "
+                f"alone {row['earth_only_feasible']*100:.1f} %")
+    return rows
+
+
 def characterise(sweep_result: dict, feasibility_tol: float = 2e-3) -> dict:
     """Separate what the cones do from what the scheduler does.
 
@@ -244,6 +289,32 @@ def characterise(sweep_result: dict, feasibility_tol: float = 2e-3) -> dict:
     out["lost_feasible_span_pp"] = float(
         (max(feasible[r][0] for r in range(len(lost)))
          - min(feasible[r][0] for r in range(len(lost)))) * 100.0)
+
+    # -- which constraint is actually doing the rejecting ---------------------
+    # This changes across the grid, and that is the point of sweeping far
+    # enough. Derived from `points` rather than a matrix so it works on a
+    # sweep produced before these matrices existed.
+    points = sweep_result.get("points") or []
+    if points:
+        for reason in ("no_sunlit_limb", "sun_in_found_fov", "no_legal_roll"):
+            worst = max(points, key=lambda p: p["reject_reasons"][reason])
+            least = min(points, key=lambda p: p["reject_reasons"][reason])
+            out[f"max_{reason}"] = float(worst["reject_reasons"][reason])
+            out[f"max_{reason}_at"] = [worst["lost_deg"], worst["found_deg"]]
+            out[f"{reason}_span_pp"] = float(
+                (worst["reject_reasons"][reason]
+                 - least["reject_reasons"][reason]) * 100.0)
+        # Where does the +z cone stop being a bystander and start being the
+        # binding constraint? The first LOST value at which `no legal roll`
+        # out-rejects `sun in FOUND` anywhere on the FOUND axis.
+        roll_binds_at = None
+        for value in lost:
+            row = [p for p in points if p["lost_deg"] == value]
+            if any(p["reject_reasons"]["no_legal_roll"]
+                   > p["reject_reasons"]["sun_in_found_fov"] for p in row):
+                roll_binds_at = float(value)
+                break
+        out["no_legal_roll_dominates_above_deg"] = roll_binds_at
     return out
 
 

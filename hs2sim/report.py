@@ -161,19 +161,20 @@ def _exclusion_section(sweep: dict, add) -> None:
     if baseline_point is not None and baseline_point["feasible_fraction"] > 0:
         gain = best["feasible_fraction"] / baseline_point["feasible_fraction"] - 1.0
         loss = 1.0 - worst["feasible_fraction"] / baseline_point["feasible_fraction"]
-        add(f"**The whole trade is worth about "
-            f"{_fmt((gain + loss) * 100, '.0f')} % of the science.** Over the "
-            f"full grid, feasible time runs from "
+        add(f"**The trade is sharply asymmetric: there is little to win and a "
+            f"lot to lose.** Over the full grid, feasible time runs from "
             f"{_fmt(worst['feasible_fraction'] * 100, '.1f')} % (LOST "
             f"{worst['lost_deg']:.0f} deg / FOUND {worst['found_deg']:.0f} deg) "
             f"to {_fmt(best['feasible_fraction'] * 100, '.1f')} % (LOST "
             f"{best['lost_deg']:.0f} / FOUND {best['found_deg']:.0f}), against "
             f"{_fmt(baseline_point['feasible_fraction'] * 100, '.1f')} % at the "
-            f"baseline -- so the best case is worth "
-            f"{_fmt(gain * 100, '+.0f')} % and the worst costs "
-            f"{_fmt(-loss * 100, '.0f')} %. That is a real but bounded "
-            f"quantity: no achievable cone doubles the science, because the "
-            f"binding limit is elsewhere.\n")
+            f"baseline. Relaxing both cones as far as the grid goes is worth "
+            f"only {_fmt(gain * 100, '+.0f')} %, because the dominant loss is "
+            f"not stray light at all; tightening them as far as the grid goes "
+            f"costs {_fmt(-loss * 100, '.0f')} %. The baseline sits close to "
+            f"the good end already, so the engineering question is not how to "
+            f"gain science by loosening -- it is how much margin exists before "
+            f"the geometry starts taking science away.\n")
 
     free_band = char.get("lost_free_band_deg")
     binds_above = char.get("lost_binds_above_deg")
@@ -185,12 +186,13 @@ def _exclusion_section(sweep: dict, add) -> None:
             f"{_fmt(baseline_lost, '.0f')} deg, so the star tracker and LOST "
             f"could give up "
             f"{_fmt(float(free_band) - float(baseline_lost), '.0f')} deg of "
-            f"keep-out at zero cost in science. The reason is geometric: "
-            f"pointing FOUND at a limb already throws +z more than 110 deg off "
-            f"nadir, so Earth is nowhere near the +z cone and only the Sun can "
-            f"violate it."
-            + (f" By {_fmt(binds_above, '.0f')} deg the Sun does catch it and "
-               f"feasibility falls off; that is the knee, and it sits "
+            f"keep-out at zero cost in science. The reason is that the roll "
+            f"about +x is a free parameter: fixing FOUND on the limb leaves a "
+            f"whole circle of +z directions to choose from, and up to "
+            f"{_fmt(free_band, '.0f')} deg there is always some arc of it that "
+            f"clears both Earth and Sun."
+            + (f" At {_fmt(binds_above, '.0f')} deg that arc starts to close, "
+               f"which is the knee -- "
                f"{_fmt(float(binds_above) - float(baseline_lost), '.0f')} deg "
                f"above the baseline.\n"
                if binds_above is not None else
@@ -211,23 +213,112 @@ def _exclusion_section(sweep: dict, add) -> None:
         lo = char.get("found_step_min_pp_per_deg")
         hi = char.get("found_step_max_pp_per_deg")
         if steps and lo is not None and hi is not None and hi > 0:
-            flat = min(steps, key=lambda s: s["pp_per_deg"])
+            cheapest = min(steps, key=lambda s: s["pp_per_deg"])
             steep = max(steps, key=lambda s: s["pp_per_deg"])
             add(f"That average is not a straight line, though, and the "
                 f"structure matters if you are negotiating a specific number. "
                 f"The price per degree ranges from "
                 f"{_fmt(lo, '.2f')} pp/deg over "
-                f"{flat['from_deg']:.0f}-{flat['to_deg']:.0f} deg -- "
+                f"{cheapest['from_deg']:.0f}-{cheapest['to_deg']:.0f} deg -- "
                 f"effectively free -- to {_fmt(hi, '.2f')} pp/deg over "
                 f"{steep['from_deg']:.0f}-{steep['to_deg']:.0f} deg. The "
                 f"cheap steps are the ones where the excluded solid angle was "
                 f"already pointing at sky the sunlit limb never occupies.\n")
 
-    add("**What the cones cannot fix.** The dominant rejection is `no sunlit "
-        "limb`, and it does not move anywhere on the grid: it is eclipse and "
-        "orbital geometry, not stray light. That is the floor the trade runs "
-        "into, and it is why even the loosest corner of the grid leaves "
-        "roughly half the timeline unusable for science.\n")
+    # -- why each cell rejects ----------------------------------------------
+    add("### Why the rejected samples are rejected\n")
+    add("Feasibility alone does not say *which* constraint bit, and on this "
+        "grid the answer changes. Percentages of the whole timeline, at the "
+        f"baseline FOUND = {_fmt(baseline_found, '.0f')} deg column.\n")
+    add("| LOST | No sunlit limb | Sun in FOUND | No legal roll |")
+    add("| --- | --- | --- | --- |")
+    col = found.index(baseline_found) if baseline_found in found else 0
+    for r, value in enumerate(lost):
+        rej = flat[r * len(found) + col]["reject_reasons"]
+        add(f"| {value:.0f} deg | "
+            f"{_fmt(rej['no_sunlit_limb'] * 100, '.1f')} % | "
+            f"{_fmt(rej['sun_in_found_fov'] * 100, '.1f')} % | "
+            f"{_fmt(rej['no_legal_roll'] * 100, '.1f')} % |")
+    add("")
+
+    limb_span = char.get("no_sunlit_limb_span_pp")
+    roll_max = char.get("max_no_legal_roll")
+    roll_at = char.get("no_legal_roll_dominates_above_deg")
+    if roll_max is not None and roll_max > 1e-4:
+        add(f"**The +z cone does eventually bind, and it binds hard.** `No "
+            f"legal roll` is exactly zero over the whole baseline range and "
+            f"then climbs to {_fmt(roll_max * 100, '.1f')} % of the timeline at "
+            f"LOST {char['max_no_legal_roll_at'][0]:.0f} deg / FOUND "
+            f"{char['max_no_legal_roll_at'][1]:.0f} deg"
+            + (f", overtaking FOUND's Sun keep-out as the dominant rejection "
+               f"from LOST {roll_at:.0f} deg upward" if roll_at is not None
+               else "")
+            + ". Where the wall sits is set by the orbit, not by the "
+            "instrument: fixing FOUND on the limb puts +x about 70 deg off "
+            "nadir, and +z is perpendicular to +x, so +z can only reach "
+            "between 20 and 160 deg from nadir. The Earth keep-out demands "
+            "more than (70 + LOST) deg of that range, so the roll freedom "
+            "closes completely at LOST = 90 deg no matter what else is true. "
+            "The sweep is watching that margin run out.\n")
+
+    # -- Sun half vs Earth half ---------------------------------------------
+    decomposition = sweep.get("plus_z_decomposition")
+    if decomposition:
+        add("### Which half of the +z cone is spending it\n")
+        add("The requirement quotes one angle covering both Sun and Earth, so "
+            "the sweep above moves them together. That is faithful to the "
+            "requirement but not actionable: a baffle or a lens hood buys you "
+            "the Sun exclusion, and nothing whatsoever buys you the Earth one. "
+            "Below, each half is moved on its own with the other held at "
+            f"{_fmt(baseline_lost, '.0f')} deg, at the baseline FOUND "
+            f"exclusion.\n")
+        add("| LOST | Sun half alone | Earth half alone | Both together |")
+        add("| --- | --- | --- | --- |")
+        col_b = found.index(baseline_found) if baseline_found in found else 0
+        both_by_lost = {lost[r]: mat["feasible_fraction"][r][col_b]
+                        for r in range(len(lost))}
+        for row in decomposition:
+            both = both_by_lost.get(row["lost_deg"])
+            add(f"| {row['lost_deg']:.0f} deg | "
+                f"{_fmt(row['sun_only_feasible'] * 100, '.1f')} % | "
+                f"{_fmt(row['earth_only_feasible'] * 100, '.1f')} % | "
+                f"{_fmt(None if both is None else both * 100, '.1f')} % |")
+        add("")
+        # Is the pair worse than either part? Compare at the widest cone.
+        last = decomposition[-1]
+        both_last = both_by_lost.get(last["lost_deg"])
+        if both_last is not None:
+            solo_cost = min(last["sun_only_feasible"],
+                            last["earth_only_feasible"])
+            base_feasible = both_by_lost.get(float(baseline_lost))
+            if base_feasible and both_last < solo_cost - 1e-6:
+                add(f"**Neither half is expensive on its own. The pair is.** At "
+                    f"LOST {last['lost_deg']:.0f} deg, widening only the Sun "
+                    f"exclusion leaves "
+                    f"{_fmt(last['sun_only_feasible'] * 100, '.1f')} % feasible "
+                    f"and widening only the Earth exclusion leaves "
+                    f"{_fmt(last['earth_only_feasible'] * 100, '.1f')} % -- "
+                    f"each costing a few points against the "
+                    f"{_fmt(base_feasible * 100, '.1f')} % baseline. Move both "
+                    f"and it collapses to "
+                    f"{_fmt(both_last * 100, '.1f')} %, far worse than the sum "
+                    f"of the parts.\n")
+                add("The mechanism is that the two keep-outs exclude "
+                    "*different* arcs of the roll circle. Separately, each "
+                    "leaves a usable arc behind. Together the arcs overlap "
+                    "enough to leave nothing, and the sample is lost. This is "
+                    "the practically useful result of the whole sweep: if the "
+                    "+z keep-out has to grow, growing one half is survivable "
+                    "and growing both is not. It also means a stray-light "
+                    "fix on the Sun side keeps its value only as long as the "
+                    "Earth exclusion stays where it is.\n")
+    add("**What the cones cannot fix.** `No sunlit limb` is the largest "
+        "rejection over most of the grid and it barely moves"
+        + (f" (a span of {_fmt(limb_span, '.1f')} percentage points across all "
+           f"{len(flat)} cells)" if limb_span is not None else "")
+        + ": it is eclipse and orbital geometry, not stray light. That is the "
+        "floor the trade runs into, and it is why even the loosest corner of "
+        "the grid leaves roughly half the timeline unusable for science.\n")
 
 
 def write_report(cfg: MissionConfig, results: dict, path: pathlib.Path) -> None:

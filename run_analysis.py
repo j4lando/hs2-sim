@@ -343,6 +343,12 @@ def main() -> int:
             "headline_search_resolution": n_az,
             **exclusion.sensitivity(sweep_result, baseline_lost, baseline_found),
         }
+        # The requirement moves both halves of the +z cone together, but only
+        # one of them is engineerable. Split them.
+        log("  splitting the +z keep-out into its Sun and Earth halves...")
+        sweep_result["plus_z_decomposition"] = exclusion.plus_z_decomposition(
+            cfg, env, array_by_name[reference], sweep_cfg.lost_deg,
+            baseline_lost_deg=baseline_lost, n_grid=n_grid, log=log)
         sweep_result["character"] = exclusion.characterise(sweep_result)
         results["exclusion_sweep"] = sweep_result
         log(f"  sweep took {sweep_result['runtime_s']/60:.1f} min; baseline "
