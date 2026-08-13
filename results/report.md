@@ -236,6 +236,86 @@ Past that the price accelerates hard: 0.40 pp/deg averaged over the whole swept 
 
 One thing to be clear about: this is a *hard* constraint on feasibility, not a soft pointing requirement. An attitude that cannot hold the buffer is not counted at all, so an ADCS that misses its spec does not blur images here -- it removes observations from the timeline. The flip side is the useful part for ADCS: there is no science argument for tightening the pointing budget below its current 1.10 deg, because the geometry cannot tell the difference.
 
+### Effective keep-out half-angle
+
+Attitude uncertainty is applied in both directions, as it has to be: a keep-**out** cone grows by the buffer and the keep-**in** field of view shrinks by it. What the vehicle must actually respect is
+
+```
+effective half-angle = quoted exclusion + attitude uncertainty
+```
+
+Both terms land in the same inequality, so only their sum matters. The tables below give **effective half-angle / feasible fraction** for each combination. *Italic* cells are the ones this section exists for: an effective half-angle past 90 deg, where the keep-out cone is larger than a hemisphere.
+
+`FOV` marks cells killed by the other half of the treatment. FOUND's half field of view is 37 deg, so at 37 deg of uncertainty the shrink has consumed the entire field of view and no commanded attitude can guarantee the limb is in frame -- whatever the keep-outs say. That is a hard wall on the ADCS, independent of the payload requirement.
+
+> **Read these two tables as per-cone sensitivity, not as the cost of uncertainty.** Each one moves a single cone and holds the other at its nominal value. Real attitude uncertainty is a property of the vehicle, so it inflates *every* keep-out at once, and the cones are superadditive -- the combined cost is worse than either column suggests. The third table below is the honest one for a pointing budget.
+
+**Table A -- FOUND Sun keep-out (+x)**, with the +z cone held at nominal.
+
+| quoted \ uncertainty | 0 deg | 1.1 deg | 5 deg | 10 deg | 20 deg | 30 deg | 40 deg |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| **50 deg** | 50 / 53.5 % | 51.1 / 53.5 % | 55 / 53.5 % | 60 / 51.5 % | 70 / 49.4 % | 80 / 49.1 % | **FOV** |
+| **60 deg** | 60 / 51.5 % | 61.1 / 51.5 % | 65 / 51.5 % | 70 / 49.4 % | 80 / 49.1 % | 90 / 47.1 % | **FOV** |
+| **70 deg** | 70 / 49.4 % | 71.1 / 49.3 % | 75 / 49.3 % | 80 / 49.1 % | 90 / 47.1 % | *100 / 44.8 %* | **FOV** |
+| **80 deg** | 80 / 49.1 % | 81.1 / 48.1 % | 85 / 47.1 % | 90 / 47.1 % | *100 / 44.8 %* | *110 / 42.6 %* | **FOV** |
+| **90 deg** | 90 / 47.1 % | *91.1 / 46.9 %* | *95 / 44.8 %* | *100 / 44.8 %* | *110 / 42.6 %* | *120 / 37.3 %* | **FOV** |
+
+**Table B -- LOST / star tracker keep-out (+z)**, Sun and Earth together, with FOUND held at nominal.
+
+| quoted \ uncertainty | 0 deg | 1.1 deg | 5 deg | 10 deg | 20 deg | 30 deg | 40 deg |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| **20 deg** | 20 / 49.4 % | 21.1 / 49.4 % | 25 / 49.4 % | 30 / 49.4 % | 40 / 49.4 % | 50 / 49.4 % | **FOV** |
+| **30 deg** | 30 / 49.4 % | 31.1 / 49.4 % | 35 / 49.4 % | 40 / 49.4 % | 50 / 49.4 % | 60 / 45.4 % | **FOV** |
+| **40 deg** | 40 / 49.4 % | 41.1 / 49.4 % | 45 / 49.4 % | 50 / 49.4 % | 60 / 45.4 % | 70 / 32.8 % | **FOV** |
+| **50 deg** | 50 / 49.4 % | 51.1 / 49.4 % | 55 / 49.4 % | 60 / 45.4 % | 70 / 32.8 % | 80 / 21.0 % | **FOV** |
+| **60 deg** | 60 / 45.4 % | 61.1 / 43.5 % | 65 / 38.2 % | 70 / 32.8 % | 80 / 21.0 % | 90 / 0.0 % | **FOV** |
+
+**Table C -- both cones inflated together.** This is what a real pointing budget does, and it is the row to quote. Every keep-out carries the uncertainty simultaneously.
+
+| Uncertainty | Effective FOUND | Effective +z | Feasible | vs Table A alone |
+| --- | --- | --- | --- | --- |
+| 0 deg | 70 deg | 40 deg | 49.4 % | +0.0 pp |
+| 0.5 deg | 70.5 deg | 40.5 deg | 49.3 % | -- |
+| 1.1 deg | 71.1 deg | 41.1 deg | 49.3 % | +0.0 pp |
+| 2 deg | 72 deg | 42 deg | 49.3 % | -- |
+| 3 deg | 73 deg | 43 deg | 49.3 % | -- |
+| 5 deg | 75 deg | 45 deg | 49.3 % | +0.0 pp |
+| 10 deg | 80 deg | 50 deg | 49.1 % | +0.0 pp |
+| 11.1 deg | 81.1 deg | 51.1 deg | 48.1 % | +0.0 pp |
+| 15 deg | 85 deg | 55 deg | 47.0 % | -0.0 pp |
+| 20 deg | 90 deg | 60 deg | 43.1 % | -4.0 pp |
+| 21.1 deg | 91.1 deg *(> 90)* | 61.1 deg | 41.0 % | -5.9 pp |
+
+The last column is the size of the mistake you would make by reading Table A on its own. It is negative everywhere the uncertainty is large, which is the superadditivity: the two keep-outs exclude different arcs of the roll circle, so inflating both removes attitudes that inflating either one alone would have left available.
+
+**What changes past 90 degrees.** Below 90 deg a keep-out removes a cap from the sky and leaves most of it. At exactly 90 deg it removes a hemisphere. Past 90 deg the *allowed* region is what is left of the opposite hemisphere: a cap of half-angle `180 - effective` about the anti-Sun direction, which shrinks to a point at 180 deg. So the constraint stops being "avoid the Sun" and becomes "point almost directly away from it", which is a different pointing problem and one the limb requirement usually cannot also satisfy.
+
+| Effective half-angle | Allowed cap about anti-Sun | FOUND feasible |
+| --- | --- | --- |
+| 80 deg | 100 deg | 49.1 % |
+| 81.1 deg | 98.9 deg | 48.1 % |
+| 85 deg | 95 deg | 47.1 % |
+| 90 deg | 90 deg | 47.1 % |
+| 91.1 deg *(> hemisphere)* | 88.9 deg | 46.9 % |
+| 95 deg *(> hemisphere)* | 85 deg | 44.8 % |
+| 100 deg *(> hemisphere)* | 80 deg | 44.8 % |
+| 110 deg *(> hemisphere)* | 70 deg | 42.6 % |
+| 120 deg *(> hemisphere)* | 60 deg | 37.3 % |
+| 130 deg *(> hemisphere)* | 50 deg | 28.7 % |
+
+**Check that the two terms really add.** The tables are built from sweeps over the *sum*, which is only valid if carrying u degrees as a buffer behaves identically to folding u into every quoted angle. The two travel through different code -- one is read from the config, the other is a float added inside the solver -- so it is measured rather than asserted:
+
+| Uncertainty | As a buffer | Folded into every cone | Difference |
+| --- | --- | --- | --- |
+| 0 deg | 49.4 % | 49.4 % | +0.00 pp |
+| 1.1 deg | 49.3 % | 49.3 % | +0.00 pp |
+| 5 deg | 49.3 % | 49.3 % | +0.00 pp |
+| 10 deg | 49.1 % | 49.1 % | +0.00 pp |
+| 20 deg | 43.1 % | 43.1 % | +0.00 pp |
+| 40 deg | 0.0 % | 14.2 % | -14.20 pp  (FOV wall, expected) |
+
+Worst disagreement 0.00 percentage points below the FOV wall, so the decomposition holds: a degree of ADCS performance and a degree of optical keep-out are the same degree. Above the wall the two paths are *supposed* to diverge, because widening a keep-out does not shrink the field of view and carrying the same number as attitude uncertainty does.
+
 **What the cones cannot fix.** `No sunlit limb` is the largest rejection over most of the grid and it barely moves (a span of 0.0 percentage points across all 35 cells): it is eclipse and orbital geometry, not stray light. That is the floor the trade runs into, and it is why even the loosest corner of the grid leaves roughly half the timeline unusable for science.
 
 ## Surface illumination (thermal inputs)

@@ -81,6 +81,7 @@ REJECT_OK = 0
 REJECT_NO_SUNLIT_LIMB = 1     # the whole visible limb is in darkness
 REJECT_SUN_IN_FOUND = 2       # every sunlit limb violates FOUND's Sun keep-out
 REJECT_NO_ROLL = 3            # no roll clears Earth+Sun from the +z keep-out
+REJECT_FOV_MARGIN = 4         # the buffer has eaten FOUND's whole field of view
 
 
 def _sunlit_limb_directions(env: EnvironmentResult, n_azimuth: int) -> np.ndarray:
@@ -139,11 +140,16 @@ def solve_experiment_pointing(cfg: MissionConfig,
     ``adcs.pointing_margin_deg(cfg)``; pass 0.0 to get the unbuffered geometric
     answer.
 
+    The buffer works in both directions, as it must: a keep-**out** cone grows
+    by the margin, and the keep-**in** field of view shrinks by it. FOUND's
+    usable FOV is ``fov_full/2 - margin`` and the limb has to sit inside that.
+    In this geometry the shrink is not what binds -- the solver places the
+    boresight exactly on the limb, so the limb sits at 0 deg off-axis with the
+    whole 37 deg half-FOV to spare -- but it is a real wall once the margin
+    reaches 37 deg, and it is enforced rather than assumed away.
+
     Not padded, deliberately:
 
-    * **FOUND's field of view.** The boresight is placed exactly on the limb
-      cone, and the FOV is 74 deg full -- the limb stays 36 deg inside the
-      frame edge, which swamps any plausible pointing error.
     * **The terminator margin** in the sunlit test. That margin is about not
       imaging the day/night boundary itself; near the limb the line of sight
       grazes the surface, so boresight error maps to along-track motion of the
@@ -162,6 +168,19 @@ def solve_experiment_pointing(cfg: MissionConfig,
     margin = math.radians(float(pointing_margin_deg))
 
     sun_excl_found = math.radians(float(found.sun_exclusion_deg)) + margin
+
+    # Keep-IN constraint, so the margin shrinks it instead of growing it. The
+    # boresight is placed on the limb cone, which puts the limb at 0 deg
+    # off-axis, so what this actually tests is whether any field of view
+    # survives the buffer at all. That reduces to a scalar precondition -- but
+    # it is a real one: at margin >= fov_full/2 the vehicle cannot guarantee
+    # the limb is in frame no matter where it is told to look.
+    fov_half_found = math.radians(float(found.fov_full_deg)) / 2.0
+    limb_offset_from_boresight = 0.0
+    # Strict: at margin == fov_half the surviving field of view is a single
+    # point of zero angular extent. That is not a field of view, and treating
+    # it as one would let the wall sit one grid step too far out.
+    fov_margin_ok = (fov_half_found - margin) > limb_offset_from_boresight
     # +z carries both LOST and the star tracker; take the tighter keep-out.
     sun_excl_z = math.radians(min(float(lost.sun_exclusion_deg),
                                   float(tracker.sun_exclusion_deg))) + margin
@@ -169,6 +188,21 @@ def solve_experiment_pointing(cfg: MissionConfig,
                                     float(tracker.earth_exclusion_deg))) + margin
 
     n_samples = env.n_samples
+
+    if not fov_margin_ok:
+        # Nothing downstream can rescue this: the buffer is wider than the
+        # half-FOV, so no commanded attitude guarantees the limb is imaged.
+        return PointingResult(
+            feasible=np.zeros(n_samples, dtype=bool),
+            dcm_BN=np.tile(np.eye(3), (n_samples, 1, 1)),
+            x_axis_N=np.tile(np.array([1.0, 0.0, 0.0]), (n_samples, 1)),
+            z_axis_N=np.tile(np.array([0.0, 0.0, 1.0]), (n_samples, 1)),
+            roll_used=np.zeros(n_samples),
+            array_power_frac=np.zeros(n_samples),
+            reject_reason=np.full(n_samples, REJECT_FOV_MARGIN, dtype=np.int8),
+            pointing_margin_deg=float(pointing_margin_deg),
+        )
+
     sun_hat = env.sun_unit()                 # (N,3)
     nadir = env.nadir_unit()                 # (N,3)
     rho = env.earth_angular_radius()         # (N,3)

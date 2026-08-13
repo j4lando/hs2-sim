@@ -106,3 +106,30 @@ analysis:
     # the grid's 50 and 60 deg rows at m = 11.1 and 21.1.
     pointing_margin_deg: [0.0, 0.5, 1.1, 2.0, 3.0, 5.0, 10.0, 11.1, 15.0,
                           20.0, 21.1]
+
+    # Effective-half-angle decomposition.
+    #
+    #     effective half-angle = quoted exclusion + attitude uncertainty
+    #
+    # Both terms enter the same inequality, so feasibility depends only on the
+    # sum. That means one sweep over the sum fills in the whole
+    # quoted x uncertainty table, and `additivity_check` measures whether the
+    # claim actually holds rather than assuming it.
+    #
+    # The ranges deliberately run past 90 deg. A keep-out half-angle beyond
+    # 90 deg is a cone LARGER than a hemisphere: what is left for the boresight
+    # is not "the sky minus a cap" but a cap of half-angle (180 - effective)
+    # about the anti-Sun direction, shrinking to a point at 180 deg. FOUND's
+    # 70 deg quoted exclusion crosses that line at 20 deg of uncertainty, and
+    # the +z Earth constraint is already past it once the Earth angular radius
+    # (~70 deg) is added in.
+    effective_angle:
+      found_deg: [50, 60, 70, 80, 90, 100, 110, 120, 130]
+      lost_deg: [20, 30, 40, 50, 60, 70, 80, 90, 100]
+      # Table axes. Quoted values are payload requirements; uncertainty values
+      # are ADCS performance. 37 deg is FOUND's half field of view -- at or
+      # above it the FOV shrink alone makes the mission infeasible, whatever
+      # the keep-outs say.
+      table_quoted_found_deg: [50, 60, 70, 80, 90]
+      table_quoted_lost_deg: [20, 30, 40, 50, 60]
+      table_uncertainty_deg: [0, 1.1, 5, 10, 20, 30, 40]

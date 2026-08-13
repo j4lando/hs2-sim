@@ -107,13 +107,36 @@ That is the +z slack spent on pointing instead of on keep-out, so there is no
 science argument for tightening the ADCS budget below 1.1 deg — the geometry
 cannot tell the difference.
 
-Two things are deliberately *not* buffered, and the reasoning is in
-`solve_experiment_pointing`: FOUND's field of view (the limb sits 36 deg inside
-the frame edge, which swamps any plausible pointing error) and the terminator
-margin in the sunlit test (near the limb the line of sight grazes the surface,
-so boresight error maps to along-track motion of the aim point at a rate that
-has nothing to do with the cone geometry — padding it would look rigorous and
-mean nothing).
+The buffer works in both directions, as it must: a keep-**out** cone grows by
+the margin and the keep-**in** field of view shrinks by it. FOUND's usable FOV
+is `fov_full/2 - margin`. In this geometry the shrink is not what binds — the
+solver puts the boresight on the limb, so the limb sits at 0 deg off-axis with
+the whole 37 deg half-FOV to spare — but it becomes a hard wall at 37 deg of
+uncertainty, where no commanded attitude can guarantee the limb is in frame at
+all. `results/report.md` tabulates that wall.
+
+One thing is deliberately *not* buffered, and the reasoning is in
+`solve_experiment_pointing`: the terminator margin in the sunlit test. Near the
+limb the line of sight grazes the surface, so boresight error maps to
+along-track motion of the aim point at a rate that has nothing to do with the
+cone geometry — padding it would look rigorous and mean nothing.
+
+### Effective half-angle, including past 90 degrees
+
+`effective = quoted exclusion + attitude uncertainty`, and the report tabulates
+feasibility against that sum for both cones, out past 90 deg. Beyond 90 deg a
+keep-out is a cone *larger than a hemisphere*: the allowed region for the
+boresight inverts into a cap of half-angle `180 - effective` about the anti-Sun
+direction, shrinking to a point at 180 deg. FOUND's 70 deg quoted exclusion
+crosses that line at 20 deg of uncertainty.
+
+Two cautions the report states in place. First, per-cone tables **understate**
+the cost of uncertainty: uncertainty is a property of the vehicle, so it
+inflates every keep-out at once, and the cones are superadditive. Second, the
+identity above is verified rather than assumed — carrying *u* degrees as a
+buffer is checked against folding *u* into every quoted angle, and the two
+agree to 0.00 percentage points below the FOV wall (and are *expected* to
+diverge above it, since widening a cone does not shrink a field of view).
 
 One thing to know before reading the output. Three quantities are reported and
 they are not equally trustworthy:

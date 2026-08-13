@@ -20567,7 +20567,7 @@
         ]
       ]
     },
-    "runtime_s": 514.4457421302795,
+    "runtime_s": 576.3053848743439,
     "reference_geometry": "C_2panel_135_plus_body",
     "baseline": {
       "lost_deg": 40.0,
@@ -20824,6 +20824,996 @@
         }
       ],
       "max_equivalence_difference_pp": 0.0
+    },
+    "effective_angle": {
+      "fov_wall_deg": 37.0,
+      "found": [
+        {
+          "cone": "found",
+          "effective_deg": 50.0,
+          "exceeds_hemisphere": false,
+          "allowed_cap_half_angle_deg": 130.0,
+          "feasible_fraction": 0.5346540383094462,
+          "reject_reasons": {
+            "no_sunlit_limb": 0.41719874230821163,
+            "sun_in_found_fov": 0.04814721938234216,
+            "no_legal_roll": 0.0
+          }
+        },
+        {
+          "cone": "found",
+          "effective_deg": 51.1,
+          "exceeds_hemisphere": false,
+          "allowed_cap_half_angle_deg": 128.9,
+          "feasible_fraction": 0.5346540383094462,
+          "reject_reasons": {
+            "no_sunlit_limb": 0.41719874230821163,
+            "sun_in_found_fov": 0.04814721938234216,
+            "no_legal_roll": 0.0
+          }
+        },
+        {
+          "cone": "found",
+          "effective_deg": 55.0,
+          "exceeds_hemisphere": false,
+          "allowed_cap_half_angle_deg": 125.0,
+          "feasible_fraction": 0.5346540383094462,
+          "reject_reasons": {
+            "no_sunlit_limb": 0.41719874230821163,
+            "sun_in_found_fov": 0.04814721938234216,
+            "no_legal_roll": 0.0
+          }
+        },
+        {
+          "cone": "found",
+          "effective_deg": 60.0,
+          "exceeds_hemisphere": false,
+          "allowed_cap_half_angle_deg": 120.0,
+          "feasible_fraction": 0.5149399124245289,
+          "reject_reasons": {
+            "no_sunlit_limb": 0.41719874230821163,
+            "sun_in_found_fov": 0.06786134526725951,
+            "no_legal_roll": 0.0
+          }
+        },
+        {
+          "cone": "found",
+          "effective_deg": 61.1,
+          "exceeds_hemisphere": false,
+          "allowed_cap_half_angle_deg": 118.9,
+          "feasible_fraction": 0.5149399124245289,
+          "reject_reasons": {
+            "no_sunlit_limb": 0.41719874230821163,
+            "sun_in_found_fov": 0.06786134526725951,
+            "no_legal_roll": 0.0
+          }
+        },
+        {
+          "cone": "found",
+          "effective_deg": 65.0,
+          "exceeds_hemisphere": false,
+          "allowed_cap_half_angle_deg": 115.0,
+          "feasible_fraction": 0.5149399124245289,
+          "reject_reasons": {
+            "no_sunlit_limb": 0.41719874230821163,
+            "sun_in_found_fov": 0.06786134526725951,
+            "no_legal_roll": 0.0
+          }
+        },
+        {
+          "cone": "found",
+          "effective_deg": 70.0,
+          "exceeds_hemisphere": false,
+          "allowed_cap_half_angle_deg": 110.0,
+          "feasible_fraction": 0.49402982195559497,
+          "reject_reasons": {
+            "no_sunlit_limb": 0.41719874230821163,
+            "sun_in_found_fov": 0.08877143573619337,
+            "no_legal_roll": 0.0
+          }
+        },
+        {
+          "cone": "found",
+          "effective_deg": 71.1,
+          "exceeds_hemisphere": false,
+          "allowed_cap_half_angle_deg": 108.9,
+          "feasible_fraction": 0.4932582319013908,
+          "reject_reasons": {
+            "no_sunlit_limb": 0.41719874230821163,
+            "sun_in_found_fov": 0.08954302579039757,
+            "no_legal_roll": 0.0
+          }
+        },
+        {
+          "cone": "found",
+          "effective_deg": 75.0,
+          "exceeds_hemisphere": false,
+          "allowed_cap_half_angle_deg": 105.0,
+          "feasible_fraction": 0.4932582319013908,
+          "reject_reasons": {
+            "no_sunlit_limb": 0.41719874230821163,
+            "sun_in_found_fov": 0.08954302579039757,
+            "no_legal_roll": 0.0
+          }
+        },
+        {
+          "cone": "found",
+          "effective_deg": 80.0,
+          "exceeds_hemisphere": false,
+          "allowed_cap_half_angle_deg": 100.0,
+          "feasible_fraction": 0.490904882236068,
+          "reject_reasons": {
+            "no_sunlit_limb": 0.41719874230821163,
+            "sun_in_found_fov": 0.09189637545572038,
+            "no_legal_roll": 0.0
+          }
+        },
+        {
+          "cone": "found",
+          "effective_deg": 81.1,
+          "exceeds_hemisphere": false,
+          "allowed_cap_half_angle_deg": 98.9,
+          "feasible_fraction": 0.48081634227734804,
+          "reject_reasons": {
+            "no_sunlit_limb": 0.41719874230821163,
+            "sun_in_found_fov": 0.10198491541444031,
+            "no_legal_roll": 0.0
+          }
+        },
+        {
+          "cone": "found",
+          "effective_deg": 85.0,
+          "exceeds_hemisphere": false,
+          "allowed_cap_half_angle_deg": 95.0,
+          "feasible_fraction": 0.47053490480507704,
+          "reject_reasons": {
+            "no_sunlit_limb": 0.41719874230821163,
+            "sun_in_found_fov": 0.11226635288671129,
+            "no_legal_roll": 0.0
+          }
+        },
+        {
+          "cone": "found",
+          "effective_deg": 90.0,
+          "exceeds_hemisphere": false,
+          "allowed_cap_half_angle_deg": 90.0,
+          "feasible_fraction": 0.47053490480507704,
+          "reject_reasons": {
+            "no_sunlit_limb": 0.41719874230821163,
+            "sun_in_found_fov": 0.11226635288671129,
+            "no_legal_roll": 0.0
+          }
+        },
+        {
+          "cone": "found",
+          "effective_deg": 91.1,
+          "exceeds_hemisphere": true,
+          "allowed_cap_half_angle_deg": 88.9,
+          "feasible_fraction": 0.4692617812156401,
+          "reject_reasons": {
+            "no_sunlit_limb": 0.41719874230821163,
+            "sun_in_found_fov": 0.11353947647614822,
+            "no_legal_roll": 0.0
+          }
+        },
+        {
+          "cone": "found",
+          "effective_deg": 95.0,
+          "exceeds_hemisphere": true,
+          "allowed_cap_half_angle_deg": 85.0,
+          "feasible_fraction": 0.44792731621689397,
+          "reject_reasons": {
+            "no_sunlit_limb": 0.41719874230821163,
+            "sun_in_found_fov": 0.1348739414748944,
+            "no_legal_roll": 0.0
+          }
+        },
+        {
+          "cone": "found",
+          "effective_deg": 100.0,
+          "exceeds_hemisphere": true,
+          "allowed_cap_half_angle_deg": 80.0,
+          "feasible_fraction": 0.44792731621689397,
+          "reject_reasons": {
+            "no_sunlit_limb": 0.41719874230821163,
+            "sun_in_found_fov": 0.1348739414748944,
+            "no_legal_roll": 0.0
+          }
+        },
+        {
+          "cone": "found",
+          "effective_deg": 110.0,
+          "exceeds_hemisphere": true,
+          "allowed_cap_half_angle_deg": 70.0,
+          "feasible_fraction": 0.42643853320730696,
+          "reject_reasons": {
+            "no_sunlit_limb": 0.41719874230821163,
+            "sun_in_found_fov": 0.1563627244844814,
+            "no_legal_roll": 0.0
+          }
+        },
+        {
+          "cone": "found",
+          "effective_deg": 120.0,
+          "exceeds_hemisphere": true,
+          "allowed_cap_half_angle_deg": 60.0,
+          "feasible_fraction": 0.3729094731968905,
+          "reject_reasons": {
+            "no_sunlit_limb": 0.41719874230821163,
+            "sun_in_found_fov": 0.20989178449489787,
+            "no_legal_roll": 0.0
+          }
+        },
+        {
+          "cone": "found",
+          "effective_deg": 130.0,
+          "exceeds_hemisphere": true,
+          "allowed_cap_half_angle_deg": 50.0,
+          "feasible_fraction": 0.28730155668293433,
+          "reject_reasons": {
+            "no_sunlit_limb": 0.41719874230821163,
+            "sun_in_found_fov": 0.295499701008854,
+            "no_legal_roll": 0.0
+          }
+        }
+      ],
+      "lost": [
+        {
+          "cone": "lost",
+          "effective_deg": 20.0,
+          "exceeds_hemisphere": false,
+          "allowed_cap_half_angle_deg": 160.0,
+          "feasible_fraction": 0.49402982195559497,
+          "reject_reasons": {
+            "no_sunlit_limb": 0.41719874230821163,
+            "sun_in_found_fov": 0.08877143573619337,
+            "no_legal_roll": 0.0
+          }
+        },
+        {
+          "cone": "lost",
+          "effective_deg": 21.1,
+          "exceeds_hemisphere": false,
+          "allowed_cap_half_angle_deg": 158.9,
+          "feasible_fraction": 0.49402982195559497,
+          "reject_reasons": {
+            "no_sunlit_limb": 0.41719874230821163,
+            "sun_in_found_fov": 0.08877143573619337,
+            "no_legal_roll": 0.0
+          }
+        },
+        {
+          "cone": "lost",
+          "effective_deg": 25.0,
+          "exceeds_hemisphere": false,
+          "allowed_cap_half_angle_deg": 155.0,
+          "feasible_fraction": 0.49402982195559497,
+          "reject_reasons": {
+            "no_sunlit_limb": 0.41719874230821163,
+            "sun_in_found_fov": 0.08877143573619337,
+            "no_legal_roll": 0.0
+          }
+        },
+        {
+          "cone": "lost",
+          "effective_deg": 30.0,
+          "exceeds_hemisphere": false,
+          "allowed_cap_half_angle_deg": 150.0,
+          "feasible_fraction": 0.49402982195559497,
+          "reject_reasons": {
+            "no_sunlit_limb": 0.41719874230821163,
+            "sun_in_found_fov": 0.08877143573619337,
+            "no_legal_roll": 0.0
+          }
+        },
+        {
+          "cone": "lost",
+          "effective_deg": 31.1,
+          "exceeds_hemisphere": false,
+          "allowed_cap_half_angle_deg": 148.9,
+          "feasible_fraction": 0.49402982195559497,
+          "reject_reasons": {
+            "no_sunlit_limb": 0.41719874230821163,
+            "sun_in_found_fov": 0.08877143573619337,
+            "no_legal_roll": 0.0
+          }
+        },
+        {
+          "cone": "lost",
+          "effective_deg": 35.0,
+          "exceeds_hemisphere": false,
+          "allowed_cap_half_angle_deg": 145.0,
+          "feasible_fraction": 0.49402982195559497,
+          "reject_reasons": {
+            "no_sunlit_limb": 0.41719874230821163,
+            "sun_in_found_fov": 0.08877143573619337,
+            "no_legal_roll": 0.0
+          }
+        },
+        {
+          "cone": "lost",
+          "effective_deg": 40.0,
+          "exceeds_hemisphere": false,
+          "allowed_cap_half_angle_deg": 140.0,
+          "feasible_fraction": 0.49402982195559497,
+          "reject_reasons": {
+            "no_sunlit_limb": 0.41719874230821163,
+            "sun_in_found_fov": 0.08877143573619337,
+            "no_legal_roll": 0.0
+          }
+        },
+        {
+          "cone": "lost",
+          "effective_deg": 41.1,
+          "exceeds_hemisphere": false,
+          "allowed_cap_half_angle_deg": 138.9,
+          "feasible_fraction": 0.49402982195559497,
+          "reject_reasons": {
+            "no_sunlit_limb": 0.41719874230821163,
+            "sun_in_found_fov": 0.08877143573619337,
+            "no_legal_roll": 0.0
+          }
+        },
+        {
+          "cone": "lost",
+          "effective_deg": 45.0,
+          "exceeds_hemisphere": false,
+          "allowed_cap_half_angle_deg": 135.0,
+          "feasible_fraction": 0.49402982195559497,
+          "reject_reasons": {
+            "no_sunlit_limb": 0.41719874230821163,
+            "sun_in_found_fov": 0.08877143573619337,
+            "no_legal_roll": 0.0
+          }
+        },
+        {
+          "cone": "lost",
+          "effective_deg": 50.0,
+          "exceeds_hemisphere": false,
+          "allowed_cap_half_angle_deg": 130.0,
+          "feasible_fraction": 0.49402982195559497,
+          "reject_reasons": {
+            "no_sunlit_limb": 0.41719874230821163,
+            "sun_in_found_fov": 0.08877143573619337,
+            "no_legal_roll": 0.0
+          }
+        },
+        {
+          "cone": "lost",
+          "effective_deg": 51.1,
+          "exceeds_hemisphere": false,
+          "allowed_cap_half_angle_deg": 128.9,
+          "feasible_fraction": 0.49402982195559497,
+          "reject_reasons": {
+            "no_sunlit_limb": 0.41719874230821163,
+            "sun_in_found_fov": 0.08877143573619337,
+            "no_legal_roll": 0.0
+          }
+        },
+        {
+          "cone": "lost",
+          "effective_deg": 55.0,
+          "exceeds_hemisphere": false,
+          "allowed_cap_half_angle_deg": 125.0,
+          "feasible_fraction": 0.4939526629501746,
+          "reject_reasons": {
+            "no_sunlit_limb": 0.41719874230821163,
+            "sun_in_found_fov": 0.08877143573619337,
+            "no_legal_roll": 7.715900542042013e-05
+          }
+        },
+        {
+          "cone": "lost",
+          "effective_deg": 60.0,
+          "exceeds_hemisphere": false,
+          "allowed_cap_half_angle_deg": 120.0,
+          "feasible_fraction": 0.4542350649100133,
+          "reject_reasons": {
+            "no_sunlit_limb": 0.41719874230821163,
+            "sun_in_found_fov": 0.08877143573619337,
+            "no_legal_roll": 0.039794757045581684
+          }
+        },
+        {
+          "cone": "lost",
+          "effective_deg": 61.1,
+          "exceeds_hemisphere": false,
+          "allowed_cap_half_angle_deg": 118.9,
+          "feasible_fraction": 0.4346945467872919,
+          "reject_reasons": {
+            "no_sunlit_limb": 0.41719874230821163,
+            "sun_in_found_fov": 0.08877143573619337,
+            "no_legal_roll": 0.05933527516830308
+          }
+        },
+        {
+          "cone": "lost",
+          "effective_deg": 65.0,
+          "exceeds_hemisphere": false,
+          "allowed_cap_half_angle_deg": 115.0,
+          "feasible_fraction": 0.3817055998148184,
+          "reject_reasons": {
+            "no_sunlit_limb": 0.41719874230821163,
+            "sun_in_found_fov": 0.08877143573619337,
+            "no_legal_roll": 0.1123242221407766
+          }
+        },
+        {
+          "cone": "lost",
+          "effective_deg": 70.0,
+          "exceeds_hemisphere": false,
+          "allowed_cap_half_angle_deg": 110.0,
+          "feasible_fraction": 0.3281186705503366,
+          "reject_reasons": {
+            "no_sunlit_limb": 0.41719874230821163,
+            "sun_in_found_fov": 0.08877143573619337,
+            "no_legal_roll": 0.1659111514052584
+          }
+        },
+        {
+          "cone": "lost",
+          "effective_deg": 80.0,
+          "exceeds_hemisphere": false,
+          "allowed_cap_half_angle_deg": 100.0,
+          "feasible_fraction": 0.20958314847321619,
+          "reject_reasons": {
+            "no_sunlit_limb": 0.41719874230821163,
+            "sun_in_found_fov": 0.08877143573619337,
+            "no_legal_roll": 0.2844466734823788
+          }
+        },
+        {
+          "cone": "lost",
+          "effective_deg": 90.0,
+          "exceeds_hemisphere": false,
+          "allowed_cap_half_angle_deg": 90.0,
+          "feasible_fraction": 0.0,
+          "reject_reasons": {
+            "no_sunlit_limb": 0.41719874230821163,
+            "sun_in_found_fov": 0.08877143573619337,
+            "no_legal_roll": 0.49402982195559497
+          }
+        },
+        {
+          "cone": "lost",
+          "effective_deg": 100.0,
+          "exceeds_hemisphere": true,
+          "allowed_cap_half_angle_deg": 80.0,
+          "feasible_fraction": 0.0,
+          "reject_reasons": {
+            "no_sunlit_limb": 0.41719874230821163,
+            "sun_in_found_fov": 0.08877143573619337,
+            "no_legal_roll": 0.49402982195559497
+          }
+        }
+      ],
+      "additivity_check": [
+        {
+          "uncertainty_deg": 0.0,
+          "as_buffer_feasible": 0.49402982195559497,
+          "as_wider_cones_feasible": 0.49402982195559497,
+          "difference_pp": 0.0,
+          "fov_wall_tripped": false
+        },
+        {
+          "uncertainty_deg": 1.1,
+          "as_buffer_feasible": 0.4932582319013908,
+          "as_wider_cones_feasible": 0.4932582319013908,
+          "difference_pp": 0.0,
+          "fov_wall_tripped": false
+        },
+        {
+          "uncertainty_deg": 5.0,
+          "as_buffer_feasible": 0.4932582319013908,
+          "as_wider_cones_feasible": 0.4932582319013908,
+          "difference_pp": 0.0,
+          "fov_wall_tripped": false
+        },
+        {
+          "uncertainty_deg": 10.0,
+          "as_buffer_feasible": 0.490904882236068,
+          "as_wider_cones_feasible": 0.490904882236068,
+          "difference_pp": 0.0,
+          "fov_wall_tripped": false
+        },
+        {
+          "uncertainty_deg": 20.0,
+          "as_buffer_feasible": 0.4307401477594954,
+          "as_wider_cones_feasible": 0.4307401477594954,
+          "difference_pp": 0.0,
+          "fov_wall_tripped": false
+        },
+        {
+          "uncertainty_deg": 40.0,
+          "as_buffer_feasible": 0.0,
+          "as_wider_cones_feasible": 0.14199185972492814,
+          "difference_pp": -14.199185972492815,
+          "fov_wall_tripped": true
+        }
+      ],
+      "max_additivity_difference_pp": 0.0,
+      "table_found": {
+        "quoted_deg": [
+          50.0,
+          60.0,
+          70.0,
+          80.0,
+          90.0
+        ],
+        "uncertainty_deg": [
+          0.0,
+          1.1,
+          5.0,
+          10.0,
+          20.0,
+          30.0,
+          40.0
+        ],
+        "fov_wall_deg": 37.0,
+        "cells": [
+          [
+            {
+              "effective_deg": 50.0,
+              "feasible_fraction": 0.5346540383094462,
+              "fov_wall": false,
+              "exceeds_hemisphere": false
+            },
+            {
+              "effective_deg": 51.1,
+              "feasible_fraction": 0.5346540383094462,
+              "fov_wall": false,
+              "exceeds_hemisphere": false
+            },
+            {
+              "effective_deg": 55.0,
+              "feasible_fraction": 0.5346540383094462,
+              "fov_wall": false,
+              "exceeds_hemisphere": false
+            },
+            {
+              "effective_deg": 60.0,
+              "feasible_fraction": 0.5149399124245289,
+              "fov_wall": false,
+              "exceeds_hemisphere": false
+            },
+            {
+              "effective_deg": 70.0,
+              "feasible_fraction": 0.49402982195559497,
+              "fov_wall": false,
+              "exceeds_hemisphere": false
+            },
+            {
+              "effective_deg": 80.0,
+              "feasible_fraction": 0.490904882236068,
+              "fov_wall": false,
+              "exceeds_hemisphere": false
+            },
+            {
+              "effective_deg": 90.0,
+              "feasible_fraction": 0.0,
+              "fov_wall": true,
+              "exceeds_hemisphere": false
+            }
+          ],
+          [
+            {
+              "effective_deg": 60.0,
+              "feasible_fraction": 0.5149399124245289,
+              "fov_wall": false,
+              "exceeds_hemisphere": false
+            },
+            {
+              "effective_deg": 61.1,
+              "feasible_fraction": 0.5149399124245289,
+              "fov_wall": false,
+              "exceeds_hemisphere": false
+            },
+            {
+              "effective_deg": 65.0,
+              "feasible_fraction": 0.5149399124245289,
+              "fov_wall": false,
+              "exceeds_hemisphere": false
+            },
+            {
+              "effective_deg": 70.0,
+              "feasible_fraction": 0.49402982195559497,
+              "fov_wall": false,
+              "exceeds_hemisphere": false
+            },
+            {
+              "effective_deg": 80.0,
+              "feasible_fraction": 0.490904882236068,
+              "fov_wall": false,
+              "exceeds_hemisphere": false
+            },
+            {
+              "effective_deg": 90.0,
+              "feasible_fraction": 0.47053490480507704,
+              "fov_wall": false,
+              "exceeds_hemisphere": false
+            },
+            {
+              "effective_deg": 100.0,
+              "feasible_fraction": 0.0,
+              "fov_wall": true,
+              "exceeds_hemisphere": true
+            }
+          ],
+          [
+            {
+              "effective_deg": 70.0,
+              "feasible_fraction": 0.49402982195559497,
+              "fov_wall": false,
+              "exceeds_hemisphere": false
+            },
+            {
+              "effective_deg": 71.1,
+              "feasible_fraction": 0.4932582319013908,
+              "fov_wall": false,
+              "exceeds_hemisphere": false
+            },
+            {
+              "effective_deg": 75.0,
+              "feasible_fraction": 0.4932582319013908,
+              "fov_wall": false,
+              "exceeds_hemisphere": false
+            },
+            {
+              "effective_deg": 80.0,
+              "feasible_fraction": 0.490904882236068,
+              "fov_wall": false,
+              "exceeds_hemisphere": false
+            },
+            {
+              "effective_deg": 90.0,
+              "feasible_fraction": 0.47053490480507704,
+              "fov_wall": false,
+              "exceeds_hemisphere": false
+            },
+            {
+              "effective_deg": 100.0,
+              "feasible_fraction": 0.44792731621689397,
+              "fov_wall": false,
+              "exceeds_hemisphere": true
+            },
+            {
+              "effective_deg": 110.0,
+              "feasible_fraction": 0.0,
+              "fov_wall": true,
+              "exceeds_hemisphere": true
+            }
+          ],
+          [
+            {
+              "effective_deg": 80.0,
+              "feasible_fraction": 0.490904882236068,
+              "fov_wall": false,
+              "exceeds_hemisphere": false
+            },
+            {
+              "effective_deg": 81.1,
+              "feasible_fraction": 0.48081634227734804,
+              "fov_wall": false,
+              "exceeds_hemisphere": false
+            },
+            {
+              "effective_deg": 85.0,
+              "feasible_fraction": 0.47053490480507704,
+              "fov_wall": false,
+              "exceeds_hemisphere": false
+            },
+            {
+              "effective_deg": 90.0,
+              "feasible_fraction": 0.47053490480507704,
+              "fov_wall": false,
+              "exceeds_hemisphere": false
+            },
+            {
+              "effective_deg": 100.0,
+              "feasible_fraction": 0.44792731621689397,
+              "fov_wall": false,
+              "exceeds_hemisphere": true
+            },
+            {
+              "effective_deg": 110.0,
+              "feasible_fraction": 0.42643853320730696,
+              "fov_wall": false,
+              "exceeds_hemisphere": true
+            },
+            {
+              "effective_deg": 120.0,
+              "feasible_fraction": 0.0,
+              "fov_wall": true,
+              "exceeds_hemisphere": true
+            }
+          ],
+          [
+            {
+              "effective_deg": 90.0,
+              "feasible_fraction": 0.47053490480507704,
+              "fov_wall": false,
+              "exceeds_hemisphere": false
+            },
+            {
+              "effective_deg": 91.1,
+              "feasible_fraction": 0.4692617812156401,
+              "fov_wall": false,
+              "exceeds_hemisphere": true
+            },
+            {
+              "effective_deg": 95.0,
+              "feasible_fraction": 0.44792731621689397,
+              "fov_wall": false,
+              "exceeds_hemisphere": true
+            },
+            {
+              "effective_deg": 100.0,
+              "feasible_fraction": 0.44792731621689397,
+              "fov_wall": false,
+              "exceeds_hemisphere": true
+            },
+            {
+              "effective_deg": 110.0,
+              "feasible_fraction": 0.42643853320730696,
+              "fov_wall": false,
+              "exceeds_hemisphere": true
+            },
+            {
+              "effective_deg": 120.0,
+              "feasible_fraction": 0.3729094731968905,
+              "fov_wall": false,
+              "exceeds_hemisphere": true
+            },
+            {
+              "effective_deg": 130.0,
+              "feasible_fraction": 0.0,
+              "fov_wall": true,
+              "exceeds_hemisphere": true
+            }
+          ]
+        ]
+      },
+      "table_lost": {
+        "quoted_deg": [
+          20.0,
+          30.0,
+          40.0,
+          50.0,
+          60.0
+        ],
+        "uncertainty_deg": [
+          0.0,
+          1.1,
+          5.0,
+          10.0,
+          20.0,
+          30.0,
+          40.0
+        ],
+        "fov_wall_deg": 37.0,
+        "cells": [
+          [
+            {
+              "effective_deg": 20.0,
+              "feasible_fraction": 0.49402982195559497,
+              "fov_wall": false,
+              "exceeds_hemisphere": false
+            },
+            {
+              "effective_deg": 21.1,
+              "feasible_fraction": 0.49402982195559497,
+              "fov_wall": false,
+              "exceeds_hemisphere": false
+            },
+            {
+              "effective_deg": 25.0,
+              "feasible_fraction": 0.49402982195559497,
+              "fov_wall": false,
+              "exceeds_hemisphere": false
+            },
+            {
+              "effective_deg": 30.0,
+              "feasible_fraction": 0.49402982195559497,
+              "fov_wall": false,
+              "exceeds_hemisphere": false
+            },
+            {
+              "effective_deg": 40.0,
+              "feasible_fraction": 0.49402982195559497,
+              "fov_wall": false,
+              "exceeds_hemisphere": false
+            },
+            {
+              "effective_deg": 50.0,
+              "feasible_fraction": 0.49402982195559497,
+              "fov_wall": false,
+              "exceeds_hemisphere": false
+            },
+            {
+              "effective_deg": 60.0,
+              "feasible_fraction": 0.0,
+              "fov_wall": true,
+              "exceeds_hemisphere": false
+            }
+          ],
+          [
+            {
+              "effective_deg": 30.0,
+              "feasible_fraction": 0.49402982195559497,
+              "fov_wall": false,
+              "exceeds_hemisphere": false
+            },
+            {
+              "effective_deg": 31.1,
+              "feasible_fraction": 0.49402982195559497,
+              "fov_wall": false,
+              "exceeds_hemisphere": false
+            },
+            {
+              "effective_deg": 35.0,
+              "feasible_fraction": 0.49402982195559497,
+              "fov_wall": false,
+              "exceeds_hemisphere": false
+            },
+            {
+              "effective_deg": 40.0,
+              "feasible_fraction": 0.49402982195559497,
+              "fov_wall": false,
+              "exceeds_hemisphere": false
+            },
+            {
+              "effective_deg": 50.0,
+              "feasible_fraction": 0.49402982195559497,
+              "fov_wall": false,
+              "exceeds_hemisphere": false
+            },
+            {
+              "effective_deg": 60.0,
+              "feasible_fraction": 0.4542350649100133,
+              "fov_wall": false,
+              "exceeds_hemisphere": false
+            },
+            {
+              "effective_deg": 70.0,
+              "feasible_fraction": 0.0,
+              "fov_wall": true,
+              "exceeds_hemisphere": false
+            }
+          ],
+          [
+            {
+              "effective_deg": 40.0,
+              "feasible_fraction": 0.49402982195559497,
+              "fov_wall": false,
+              "exceeds_hemisphere": false
+            },
+            {
+              "effective_deg": 41.1,
+              "feasible_fraction": 0.49402982195559497,
+              "fov_wall": false,
+              "exceeds_hemisphere": false
+            },
+            {
+              "effective_deg": 45.0,
+              "feasible_fraction": 0.49402982195559497,
+              "fov_wall": false,
+              "exceeds_hemisphere": false
+            },
+            {
+              "effective_deg": 50.0,
+              "feasible_fraction": 0.49402982195559497,
+              "fov_wall": false,
+              "exceeds_hemisphere": false
+            },
+            {
+              "effective_deg": 60.0,
+              "feasible_fraction": 0.4542350649100133,
+              "fov_wall": false,
+              "exceeds_hemisphere": false
+            },
+            {
+              "effective_deg": 70.0,
+              "feasible_fraction": 0.3281186705503366,
+              "fov_wall": false,
+              "exceeds_hemisphere": false
+            },
+            {
+              "effective_deg": 80.0,
+              "feasible_fraction": 0.0,
+              "fov_wall": true,
+              "exceeds_hemisphere": false
+            }
+          ],
+          [
+            {
+              "effective_deg": 50.0,
+              "feasible_fraction": 0.49402982195559497,
+              "fov_wall": false,
+              "exceeds_hemisphere": false
+            },
+            {
+              "effective_deg": 51.1,
+              "feasible_fraction": 0.49402982195559497,
+              "fov_wall": false,
+              "exceeds_hemisphere": false
+            },
+            {
+              "effective_deg": 55.0,
+              "feasible_fraction": 0.4939526629501746,
+              "fov_wall": false,
+              "exceeds_hemisphere": false
+            },
+            {
+              "effective_deg": 60.0,
+              "feasible_fraction": 0.4542350649100133,
+              "fov_wall": false,
+              "exceeds_hemisphere": false
+            },
+            {
+              "effective_deg": 70.0,
+              "feasible_fraction": 0.3281186705503366,
+              "fov_wall": false,
+              "exceeds_hemisphere": false
+            },
+            {
+              "effective_deg": 80.0,
+              "feasible_fraction": 0.20958314847321619,
+              "fov_wall": false,
+              "exceeds_hemisphere": false
+            },
+            {
+              "effective_deg": 90.0,
+              "feasible_fraction": 0.0,
+              "fov_wall": true,
+              "exceeds_hemisphere": false
+            }
+          ],
+          [
+            {
+              "effective_deg": 60.0,
+              "feasible_fraction": 0.4542350649100133,
+              "fov_wall": false,
+              "exceeds_hemisphere": false
+            },
+            {
+              "effective_deg": 61.1,
+              "feasible_fraction": 0.4346945467872919,
+              "fov_wall": false,
+              "exceeds_hemisphere": false
+            },
+            {
+              "effective_deg": 65.0,
+              "feasible_fraction": 0.3817055998148184,
+              "fov_wall": false,
+              "exceeds_hemisphere": false
+            },
+            {
+              "effective_deg": 70.0,
+              "feasible_fraction": 0.3281186705503366,
+              "fov_wall": false,
+              "exceeds_hemisphere": false
+            },
+            {
+              "effective_deg": 80.0,
+              "feasible_fraction": 0.20958314847321619,
+              "fov_wall": false,
+              "exceeds_hemisphere": false
+            },
+            {
+              "effective_deg": 90.0,
+              "feasible_fraction": 0.0,
+              "fov_wall": false,
+              "exceeds_hemisphere": false
+            },
+            {
+              "effective_deg": 100.0,
+              "feasible_fraction": 0.0,
+              "fov_wall": true,
+              "exceeds_hemisphere": true
+            }
+          ]
+        ]
+      }
     },
     "character": {
       "scheduler_noise_images_per_day": 552.6560058640844,

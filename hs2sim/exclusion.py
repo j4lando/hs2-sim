@@ -265,6 +265,175 @@ def margin_sweep(cfg: MissionConfig,
     return rows
 
 
+def effective_angle_sweep(cfg: MissionConfig,
+                          env: EnvironmentResult,
+                          array: power.ArrayGeometry,
+                          cone: str,
+                          effective_deg: Sequence[float],
+                          *,
+                          n_grid: int = 32,
+                          log: Callable[[str], None] | None = None) -> list[dict]:
+    """Feasibility against the *effective* half-angle of one keep-out cone.
+
+    The effective half-angle is what the vehicle actually has to respect:
+
+        effective = quoted exclusion + attitude uncertainty
+
+    Both terms enter the same inequality, so only their sum matters (up to the
+    field-of-view wall -- see ``decomposition_table``). Sweeping the sum once
+    is therefore enough to fill in the whole quoted-vs-uncertainty table, and
+    is far cheaper than solving every cell of it.
+
+    ``cone`` selects which keep-out moves: ``"found"`` for FOUND's Sun
+    exclusion on +x, ``"lost"`` for the +z Sun and Earth exclusion. The other
+    cone is held at its configured value and the margin is set to zero, so the
+    swept angle is the effective one by construction.
+
+    **This isolates one cone, which is not what attitude uncertainty does.**
+    Uncertainty is a property of the vehicle, so it inflates every keep-out at
+    once. Reading a single-cone table as "the cost of u degrees of uncertainty"
+    therefore *understates* it, and by a lot -- the cones are superadditive.
+    Use it for the sensitivity of one cone; use ``margin_sweep`` for the real
+    cost of a pointing budget.
+
+    Values above 90 deg are the interesting part and are why this exists.
+    A keep-out half-angle beyond 90 deg is a cone larger than a hemisphere:
+    the legal region for that boresight is no longer "most of the sky minus a
+    cap", it is a cap of half-angle ``180 - effective`` about the *anti*-Sun
+    (or anti-nadir) direction, and it collapses to a point at 180 deg.
+    """
+    paths = {"found": (FOUND_PATH,), "lost": LOST_PATHS}[cone]
+    rows: list[dict] = []
+    for value in effective_deg:
+        trial = cfg.copy_with(**{p: float(value) for p in paths})
+        pointing = geometry.solve_experiment_pointing(
+            trial, env, n_azimuth=n_grid, n_roll=n_grid,
+            array_normals=array.normals, array_weights=array.peak_w,
+            pointing_margin_deg=0.0)
+        rows.append({
+            "cone": cone,
+            "effective_deg": float(value),
+            "exceeds_hemisphere": bool(value > 90.0),
+            # For a keep-out beyond 90 deg, what is left for the boresight.
+            "allowed_cap_half_angle_deg": float(max(0.0, 180.0 - value)),
+            "feasible_fraction": float(np.mean(pointing.feasible)),
+            "reject_reasons": _reject_fractions(pointing),
+        })
+        if log is not None:
+            flag = "  (> hemisphere)" if value > 90.0 else ""
+            log(f"    {cone} effective {value:.1f} deg: feasible "
+                f"{rows[-1]['feasible_fraction']*100:.1f} %{flag}")
+    return rows
+
+
+def additivity_check(cfg: MissionConfig,
+                     env: EnvironmentResult,
+                     array: power.ArrayGeometry,
+                     uncertainty_deg: Sequence[float],
+                     *,
+                     n_grid: int = 32,
+                     log: Callable[[str], None] | None = None) -> list[dict]:
+    """Verify that quoted exclusion and attitude uncertainty really do add.
+
+    The claim is ``effective = quoted + uncertainty`` for **every** cone at
+    once, which is the only form of it that is true: attitude uncertainty is a
+    property of the vehicle, not of an instrument, so it lands on all the
+    keep-outs simultaneously. Testing it one cone at a time gives a wrong
+    answer -- the uncertainty leg moves the other cones too, and the comparison
+    silently stops being like-for-like.
+
+    So each check runs the model twice: once with the uncertainty applied as a
+    buffer, and once with that same number folded into every quoted angle and
+    no buffer. The two travel through completely different code -- one is read
+    from the config, the other is a float added inside the solver -- so
+    agreement is worth measuring rather than asserting.
+    """
+    out: list[dict] = []
+    for uncertainty in uncertainty_deg:
+        shifted = cfg.copy_with(**{
+            path: float(getattr_dotted(cfg, path)) + float(uncertainty)
+            for path in LOST_PATHS + (FOUND_PATH,)
+        })
+        a = geometry.solve_experiment_pointing(
+            cfg, env, n_azimuth=n_grid, n_roll=n_grid,
+            array_normals=array.normals, array_weights=array.peak_w,
+            pointing_margin_deg=float(uncertainty))
+        b = geometry.solve_experiment_pointing(
+            shifted, env, n_azimuth=n_grid, n_roll=n_grid,
+            array_normals=array.normals, array_weights=array.peak_w,
+            pointing_margin_deg=0.0)
+        row = {
+            "uncertainty_deg": float(uncertainty),
+            "as_buffer_feasible": float(np.mean(a.feasible)),
+            "as_wider_cones_feasible": float(np.mean(b.feasible)),
+            "difference_pp": float(
+                (np.mean(a.feasible) - np.mean(b.feasible)) * 100.0),
+            # Only the buffer path enforces the field-of-view shrink; widening
+            # the cones does not touch the FOV, so past the wall the two are
+            # *supposed* to disagree and the difference is not an error.
+            "fov_wall_tripped": bool(
+                np.all(a.reject_reason == geometry.REJECT_FOV_MARGIN)),
+        }
+        out.append(row)
+        if log is not None:
+            log(f"    uncertainty {uncertainty:.1f} deg: as buffer "
+                f"{row['as_buffer_feasible']*100:.1f} %, as wider cones "
+                f"{row['as_wider_cones_feasible']*100:.1f} % "
+                f"(delta {row['difference_pp']:+.2f} pp)"
+                + ("  [FOV wall, expected]" if row["fov_wall_tripped"] else ""))
+    return out
+
+
+def getattr_dotted(cfg: MissionConfig, dotted: str):
+    node = cfg
+    for part in dotted.split("."):
+        node = getattr(node, part)
+    return node
+
+
+def decomposition_table(rows: Sequence[dict],
+                        quoted_deg: Sequence[float],
+                        uncertainty_deg: Sequence[float],
+                        fov_wall_deg: float | None = None) -> dict:
+    """Lay the effective-angle sweep out as quoted x attitude-uncertainty.
+
+    Cells whose effective angle falls outside the swept range are ``None``.
+    Cells where the uncertainty alone exceeds the half field of view are
+    marked infeasible regardless, because the FOV shrink kills them before the
+    keep-out geometry gets a say.
+    """
+    by_angle = {row["effective_deg"]: row for row in rows}
+    grid: list[list[dict | None]] = []
+    for quoted in quoted_deg:
+        line: list[dict | None] = []
+        for uncertainty in uncertainty_deg:
+            effective = float(quoted) + float(uncertainty)
+            found = by_angle.get(effective)
+            if fov_wall_deg is not None and uncertainty >= fov_wall_deg:
+                line.append({
+                    "effective_deg": effective,
+                    "feasible_fraction": 0.0,
+                    "fov_wall": True,
+                    "exceeds_hemisphere": effective > 90.0,
+                })
+            elif found is None:
+                line.append(None)
+            else:
+                line.append({
+                    "effective_deg": effective,
+                    "feasible_fraction": found["feasible_fraction"],
+                    "fov_wall": False,
+                    "exceeds_hemisphere": effective > 90.0,
+                })
+        grid.append(line)
+    return {
+        "quoted_deg": [float(q) for q in quoted_deg],
+        "uncertainty_deg": [float(u) for u in uncertainty_deg],
+        "fov_wall_deg": fov_wall_deg,
+        "cells": grid,
+    }
+
+
 def margin_characterise(sweep_result: dict,
                         baseline_margin_deg: float) -> dict:
     """Price the pointing budget: feasibility lost per degree of error.

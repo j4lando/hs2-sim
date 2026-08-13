@@ -366,6 +366,49 @@ def main() -> int:
         sweep_result["margin_character"] = exclusion.margin_characterise(
             sweep_result, adcs.pointing_margin_deg(cfg))
 
+        # -- effective half-angle: quoted exclusion + attitude uncertainty ----
+        eff_cfg = sweep_cfg.effective_angle
+        fov_wall = float(cfg.spacecraft.sensors.found_camera.fov_full_deg) / 2.0
+        log("  sweeping effective keep-out half-angle (past 90 deg, where the "
+            "cone exceeds a hemisphere)...")
+        # Solve every effective angle the tables will ask for, plus whatever
+        # extra points the config wants for the beyond-90 narrative. Deriving
+        # the list from the table axes is what keeps the tables free of holes.
+        def needed(quoted, extra):
+            wanted = {float(q) + float(u)
+                      for q in quoted
+                      for u in eff_cfg.table_uncertainty_deg
+                      if float(u) < fov_wall}
+            return sorted(wanted | {float(v) for v in extra})
+
+        eff_found = exclusion.effective_angle_sweep(
+            cfg, env, array_by_name[reference], "found",
+            needed(eff_cfg.table_quoted_found_deg, eff_cfg.found_deg),
+            n_grid=n_grid, log=log)
+        eff_lost = exclusion.effective_angle_sweep(
+            cfg, env, array_by_name[reference], "lost",
+            needed(eff_cfg.table_quoted_lost_deg, eff_cfg.lost_deg),
+            n_grid=n_grid, log=log)
+        log("  checking that quoted exclusion and uncertainty really add...")
+        additivity = exclusion.additivity_check(
+            cfg, env, array_by_name[reference], [0.0, 1.1, 5.0, 10.0, 20.0, 40.0],
+            n_grid=n_grid, log=log)
+        sweep_result["effective_angle"] = {
+            "fov_wall_deg": fov_wall,
+            "found": eff_found,
+            "lost": eff_lost,
+            "additivity_check": additivity,
+            "max_additivity_difference_pp": max(
+                (abs(r["difference_pp"]) for r in additivity
+                 if not r["fov_wall_tripped"]), default=None),
+            "table_found": exclusion.decomposition_table(
+                eff_found, eff_cfg.table_quoted_found_deg,
+                eff_cfg.table_uncertainty_deg, fov_wall_deg=fov_wall),
+            "table_lost": exclusion.decomposition_table(
+                eff_lost, eff_cfg.table_quoted_lost_deg,
+                eff_cfg.table_uncertainty_deg, fov_wall_deg=fov_wall),
+        }
+
         sweep_result["character"] = exclusion.characterise(sweep_result)
         results["exclusion_sweep"] = sweep_result
         log(f"  sweep took {sweep_result['runtime_s']/60:.1f} min; baseline "

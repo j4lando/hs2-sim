@@ -129,6 +129,155 @@ def _margin_subsection(sweep: dict, add) -> None:
         "geometry cannot tell the difference.\n")
 
 
+def _decomposition_table(add, table: dict, cone_label: str) -> None:
+    """quoted exclusion (rows) x attitude uncertainty (columns)."""
+    quoted = table["quoted_deg"]
+    uncertainty = table["uncertainty_deg"]
+    add(f"| {cone_label} \\ uncertainty | "
+        + " | ".join(f"{u:g} deg" for u in uncertainty) + " |")
+    add("| --- |" + " --- |" * len(uncertainty))
+    for r, q in enumerate(quoted):
+        cells = []
+        for c in range(len(uncertainty)):
+            cell = table["cells"][r][c]
+            if cell is None:
+                cells.append("--")
+                continue
+            if cell.get("fov_wall"):
+                cells.append("**FOV**")
+                continue
+            text = (f"{cell['effective_deg']:g} / "
+                    f"{cell['feasible_fraction'] * 100:.1f} %")
+            if cell.get("exceeds_hemisphere"):
+                text = f"*{text}*"
+            cells.append(text)
+        add(f"| **{q:g} deg** | " + " | ".join(cells) + " |")
+    add("")
+
+
+def _effective_angle_subsection(sweep: dict, add) -> None:
+    """How attitude uncertainty moves the effective keep-out half-angle."""
+    eff = sweep.get("effective_angle")
+    if not eff:
+        return
+    fov_wall = eff.get("fov_wall_deg")
+
+    add("### Effective keep-out half-angle\n")
+    add("Attitude uncertainty is applied in both directions, as it has to be: "
+        "a keep-**out** cone grows by the buffer and the keep-**in** field of "
+        "view shrinks by it. What the vehicle must actually respect is\n")
+    add("```")
+    add("effective half-angle = quoted exclusion + attitude uncertainty")
+    add("```")
+    add("")
+    add("Both terms land in the same inequality, so only their sum matters. "
+        "The tables below give **effective half-angle / feasible fraction** "
+        "for each combination. *Italic* cells are the ones this section exists "
+        "for: an effective half-angle past 90 deg, where the keep-out cone is "
+        "larger than a hemisphere.\n")
+    if fov_wall:
+        add(f"`FOV` marks cells killed by the other half of the treatment. "
+            f"FOUND's half field of view is {_fmt(fov_wall, '.0f')} deg, so at "
+            f"{_fmt(fov_wall, '.0f')} deg of uncertainty the shrink has "
+            f"consumed the entire field of view and no commanded attitude can "
+            f"guarantee the limb is in frame -- whatever the keep-outs say. "
+            f"That is a hard wall on the ADCS, independent of the payload "
+            f"requirement.\n")
+
+    add("> **Read these two tables as per-cone sensitivity, not as the cost of "
+        "uncertainty.** Each one moves a single cone and holds the other at "
+        "its nominal value. Real attitude uncertainty is a property of the "
+        "vehicle, so it inflates *every* keep-out at once, and the cones are "
+        "superadditive -- the combined cost is worse than either column "
+        "suggests. The third table below is the honest one for a pointing "
+        "budget.\n")
+
+    add(f"**Table A -- FOUND Sun keep-out (+x)**, with the +z cone held at "
+        f"nominal.\n")
+    _decomposition_table(add, eff["table_found"], "quoted")
+    add(f"**Table B -- LOST / star tracker keep-out (+z)**, Sun and Earth "
+        f"together, with FOUND held at nominal.\n")
+    _decomposition_table(add, eff["table_lost"], "quoted")
+
+    # -- both cones at once, which is what uncertainty actually does ---------
+    margin_rows = sorted(sweep.get("margin_sweep") or [],
+                         key=lambda r: r["margin_deg"])
+    base = sweep.get("baseline", {})
+    if margin_rows and "lost_deg" in base and "found_deg" in base:
+        add("**Table C -- both cones inflated together.** This is what a real "
+            "pointing budget does, and it is the row to quote. Every keep-out "
+            "carries the uncertainty simultaneously.\n")
+        add("| Uncertainty | Effective FOUND | Effective +z | Feasible | "
+            "vs Table A alone |")
+        add("| --- | --- | --- | --- | --- |")
+        found_by_angle = {r["effective_deg"]: r["feasible_fraction"]
+                          for r in eff["found"]}
+        for row in margin_rows:
+            u = row["margin_deg"]
+            eff_found = base["found_deg"] + u
+            eff_lost = base["lost_deg"] + u
+            solo = found_by_angle.get(eff_found)
+            delta = ("--" if solo is None else
+                     _fmt((row["feasible_fraction"] - solo) * 100, '+.1f') + " pp")
+            hemi = " *(> 90)*" if eff_found > 90.0 else ""
+            add(f"| {u:g} deg | {eff_found:g} deg{hemi} | {eff_lost:g} deg | "
+                f"{_fmt(row['feasible_fraction'] * 100, '.1f')} % | {delta} |")
+        add("")
+        add("The last column is the size of the mistake you would make by "
+            "reading Table A on its own. It is negative everywhere the "
+            "uncertainty is large, which is the superadditivity: the two "
+            "keep-outs exclude different arcs of the roll circle, so inflating "
+            "both removes attitudes that inflating either one alone would have "
+            "left available.\n")
+
+    # -- beyond 90 deg -------------------------------------------------------
+    add("**What changes past 90 degrees.** Below 90 deg a keep-out removes a "
+        "cap from the sky and leaves most of it. At exactly 90 deg it removes "
+        "a hemisphere. Past 90 deg the *allowed* region is what is left of the "
+        "opposite hemisphere: a cap of half-angle `180 - effective` about the "
+        "anti-Sun direction, which shrinks to a point at 180 deg. So the "
+        "constraint stops being \"avoid the Sun\" and becomes \"point almost "
+        "directly away from it\", which is a different pointing problem and "
+        "one the limb requirement usually cannot also satisfy.\n")
+    add("| Effective half-angle | Allowed cap about anti-Sun | FOUND feasible |")
+    add("| --- | --- | --- |")
+    for row in eff["found"]:
+        if row["effective_deg"] < 80.0:
+            continue
+        add(f"| {row['effective_deg']:g} deg"
+            + (" *(> hemisphere)*" if row["exceeds_hemisphere"] else "")
+            + f" | {row['allowed_cap_half_angle_deg']:g} deg | "
+            f"{_fmt(row['feasible_fraction'] * 100, '.1f')} % |")
+    add("")
+
+    # -- additivity check ----------------------------------------------------
+    checks = eff.get("additivity_check") or []
+    worst = eff.get("max_additivity_difference_pp")
+    if checks and worst is not None:
+        add(f"**Check that the two terms really add.** The tables are built "
+            f"from sweeps over the *sum*, which is only valid if carrying u "
+            f"degrees as a buffer behaves identically to folding u into every "
+            f"quoted angle. The two travel through different code -- one is "
+            f"read from the config, the other is a float added inside the "
+            f"solver -- so it is measured rather than asserted:\n")
+        add("| Uncertainty | As a buffer | Folded into every cone | "
+            "Difference |")
+        add("| --- | --- | --- | --- |")
+        for row in checks:
+            note = "  (FOV wall, expected)" if row["fov_wall_tripped"] else ""
+            add(f"| {row['uncertainty_deg']:g} deg | "
+                f"{_fmt(row['as_buffer_feasible'] * 100, '.1f')} % | "
+                f"{_fmt(row['as_wider_cones_feasible'] * 100, '.1f')} % | "
+                f"{_fmt(row['difference_pp'], '+.2f')} pp{note} |")
+        add("")
+        add(f"Worst disagreement {_fmt(worst, '.2f')} percentage points below "
+            f"the FOV wall, so the decomposition holds: a degree of ADCS "
+            f"performance and a degree of optical keep-out are the same "
+            f"degree. Above the wall the two paths are *supposed* to diverge, "
+            f"because widening a keep-out does not shrink the field of view "
+            f"and carrying the same number as attitude uncertainty does.\n")
+
+
 def _exclusion_section(sweep: dict, add) -> None:
     lost = sweep["lost_deg"]
     found = sweep["found_deg"]
@@ -405,6 +554,7 @@ def _exclusion_section(sweep: dict, add) -> None:
                     "fix on the Sun side keeps its value only as long as the "
                     "Earth exclusion stays where it is.\n")
     _margin_subsection(sweep, add)
+    _effective_angle_subsection(sweep, add)
 
     add("**What the cones cannot fix.** `No sunlit limb` is the largest "
         "rejection over most of the grid and it barely moves"

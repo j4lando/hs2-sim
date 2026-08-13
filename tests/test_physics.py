@@ -360,3 +360,82 @@ def test_margin_defaults_to_the_configured_budget():
     assert default.pointing_margin_deg == pytest.approx(
         adcs.pointing_margin_deg(cfg))
     assert default.pointing_margin_deg > 0.0
+
+
+def test_fov_shrinks_by_the_margin_and_walls_off():
+    """The keep-in constraint must shrink, not grow, with the buffer.
+
+    FOUND's half field of view is 37 deg. Below that the shrink is not what
+    binds; at or above it no commanded attitude can guarantee the limb is in
+    frame, and the solver must say so with its own reject code rather than
+    quietly returning attitudes it cannot honour.
+    """
+    cfg = MissionConfig()
+    env = make_env(n=12)
+    half_fov = float(cfg.spacecraft.sensors.found_camera.fov_full_deg) / 2.0
+
+    inside = geometry.solve_experiment_pointing(
+        cfg, env, n_azimuth=24, n_roll=24,
+        pointing_margin_deg=half_fov - 1.0)
+    at_wall = geometry.solve_experiment_pointing(
+        cfg, env, n_azimuth=24, n_roll=24, pointing_margin_deg=half_fov)
+    beyond = geometry.solve_experiment_pointing(
+        cfg, env, n_azimuth=24, n_roll=24, pointing_margin_deg=half_fov + 5.0)
+
+    assert not at_wall.feasible.any()
+    assert not beyond.feasible.any()
+    assert np.all(at_wall.reject_reason == geometry.REJECT_FOV_MARGIN)
+    assert np.all(beyond.reject_reason == geometry.REJECT_FOV_MARGIN)
+    # Below the wall the FOV is not the thing rejecting samples.
+    assert not np.any(inside.reject_reason == geometry.REJECT_FOV_MARGIN)
+
+
+def test_uncertainty_and_quoted_exclusion_are_interchangeable():
+    """u deg of buffer == folding u into every quoted keep-out.
+
+    This is the identity the effective-half-angle tables are built on. It has
+    to hold below the field-of-view wall, and it has to *fail* above it --
+    widening a keep-out does not shrink the FOV, but attitude uncertainty does.
+    """
+    cfg = MissionConfig()
+    env = make_env(n=16)
+    paths = exclusion.LOST_PATHS + (exclusion.FOUND_PATH,)
+
+    for uncertainty in (0.0, 7.0, 15.0):
+        shifted = cfg.copy_with(**{
+            p: float(exclusion.getattr_dotted(cfg, p)) + uncertainty
+            for p in paths})
+        as_buffer = geometry.solve_experiment_pointing(
+            cfg, env, n_azimuth=32, n_roll=32,
+            pointing_margin_deg=uncertainty)
+        as_cones = geometry.solve_experiment_pointing(
+            shifted, env, n_azimuth=32, n_roll=32, pointing_margin_deg=0.0)
+        assert as_buffer.feasible.tolist() == as_cones.feasible.tolist(), (
+            f"{uncertainty} deg of uncertainty is not equivalent to "
+            f"{uncertainty} deg of extra keep-out")
+
+
+def test_keep_out_beyond_90_degrees_is_handled():
+    """An exclusion half-angle past 90 deg is a cone bigger than a hemisphere.
+
+    The allowed region for the boresight inverts: it becomes a cap of
+    half-angle (180 - effective) about the anti-Sun direction. Feasibility must
+    keep falling monotonically through that transition rather than wrapping.
+    """
+    cfg = MissionConfig()
+    env = make_env(n=16)
+    counts = []
+    for angle in (80.0, 90.0, 100.0, 120.0, 150.0, 179.0):
+        trial = cfg.copy_with(**{exclusion.FOUND_PATH: angle})
+        result = geometry.solve_experiment_pointing(
+            trial, env, n_azimuth=32, n_roll=32, pointing_margin_deg=0.0)
+        counts.append(int(result.feasible.sum()))
+        # Every surviving attitude must genuinely clear the oversized cone.
+        if result.feasible.any():
+            sun = env.sun_unit()[result.feasible]
+            ang = geometry.angle_between(result.x_axis_N[result.feasible], sun)
+            assert np.all(ang > math.radians(angle) - 1e-6)
+    assert counts == sorted(counts, reverse=True)
+    # A 179 deg keep-out leaves a 1 deg cap; nothing can satisfy it and the
+    # limb requirement at once.
+    assert counts[-1] == 0
