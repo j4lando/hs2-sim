@@ -201,6 +201,9 @@ def main() -> int:
     geometries = power.all_array_geometries(cfg)
     per_geometry: dict[str, object] = {}
     flown_attitudes: dict[str, np.ndarray] = {}
+    # Full-rate scheduler timelines, kept out of summary.json (they are far too
+    # big to serialise) and handed straight to the plotting layer.
+    conops_timelines: dict[str, conops.ConopsResult] = {}
     # Kept so the exclusion sweep can re-run the scheduler on one geometry
     # without redoing the standby attitude solve.
     array_by_name: dict[str, power.ArrayGeometry] = {}
@@ -303,6 +306,7 @@ def main() -> int:
         entry["payload_rate_sweep"] = sweep
         # Keep the flown attitude so it can be handed to Vizard afterwards.
         flown_attitudes[array.name] = result.dcm_BN
+        conops_timelines[array.name] = result
         array_by_name[array.name] = array
         standby_attitudes[array.name] = standby_dcm
         per_geometry[array.name] = entry
@@ -515,7 +519,8 @@ def main() -> int:
 
     try:
         from hs2sim.output import plots
-        plots.make_all(cfg, env, results, RESULTS_DIR)
+        plots.make_all(cfg, env, results, RESULTS_DIR,
+                       timelines=conops_timelines)
         log("Wrote plots")
     except Exception as exc:  # pragma: no cover
         log(f"Plotting skipped: {exc}")
