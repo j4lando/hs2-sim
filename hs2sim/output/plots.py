@@ -6,8 +6,8 @@ import pathlib
 
 import numpy as np
 
-from .config import MissionConfig
-from .environment import EnvironmentResult
+from ..config import MissionConfig
+from ..environment import EnvironmentResult
 
 
 def make_all(cfg: MissionConfig, env: EnvironmentResult,

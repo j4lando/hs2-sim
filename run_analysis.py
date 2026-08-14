@@ -484,7 +484,7 @@ def main() -> int:
 
     # ------------------------------------------------------------ Vizard
     if args.vizard is not None:
-        from hs2sim import vizard
+        from hs2sim.output import vizard
         choice = args.vizard
         if choice == "__best__":
             choice = max(per_geometry,
@@ -514,7 +514,7 @@ def main() -> int:
     log(f"Wrote {out_path}")
 
     try:
-        from hs2sim import plots
+        from hs2sim.output import plots
         plots.make_all(cfg, env, results, RESULTS_DIR)
         log("Wrote plots")
     except Exception as exc:  # pragma: no cover
