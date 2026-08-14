@@ -48,9 +48,9 @@ def main() -> int:
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
-    from hs2sim.output import plots
-    plots._exclusion_heatmaps(sweep, RESULTS_DIR, plt)
-    plots._margin_curve(sweep, RESULTS_DIR, plt)
+    from hs2sim.output import exclusion_plots
+    exclusion_plots.heatmaps(sweep, RESULTS_DIR, plt)
+    exclusion_plots.margin_curve(sweep, RESULTS_DIR, plt)
     print(f"wrote {RESULTS_DIR / 'exclusion_sweep.png'}")
     return 0
 

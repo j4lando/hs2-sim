@@ -1,8 +1,8 @@
 # The battery power figure
 
-`results/battery_power_01.png`, `_02.png`, … — written by `run_analysis.py` for
-the array geometry with the best energy margin, which is the same reference
-rule the exclusion sweep uses.
+`results/battery_power_<geometry>_01.png`, `_02.png`, … — written by
+`run_analysis.py` for **every** array geometry, so the three candidates can be
+compared orbit by orbit rather than only through their averages.
 
 ## What it draws
 
@@ -17,6 +17,12 @@ panel of a given kind shares its x and y range, so a feature can be read
 straight down the column across successive orbits. The run does not start on a
 node, so the leading fragment is back-dated rather than slid to zero — it sits
 at the phase it was actually flown at.
+
+**Shared ranges across geometries.** The power range and the charge range are
+held common across all three geometries, not just within one. Letting each
+autoscale to its own data would redraw a starved timeline to fill its axis and
+make it look like a healthy one — and comparing the geometries is the whole
+reason three of them are drawn.
 
 **Mode shading.** A background wash per flown mode, through both panels.
 Experiment, downlink and standby take the three categorical hues that stay
