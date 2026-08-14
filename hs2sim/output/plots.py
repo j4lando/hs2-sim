@@ -7,11 +7,41 @@ import pathlib
 import numpy as np
 
 from ..config import MissionConfig
+from ..conops import MODE_NAMES, ConopsResult
 from ..environment import EnvironmentResult
+
+# Background wash per flown mode. Blue, orange and aqua are the first three
+# slots of the categorical palette -- the three that stay separable under
+# colour-vision deficiency when every pair can appear together, which is the
+# case here because the scheduler can put any two modes side by side. SLEW is
+# deliberately neutral: it is a transition between identities rather than one
+# of its own, and it abuts every other mode, so giving it a hue would put two
+# saturated washes against each other at every mode change. SAFE takes the
+# status-critical red.
+MODE_WASH = {
+    "safe": "#d03b3b",
+    "standby": "#1baf7a",
+    "slew": "#898781",
+    "experiment": "#2a78d6",
+    "downlink": "#eb6834",
+}
+MODE_WASH_ALPHA = 0.22
+# The washes stop short of the top of the axes; the strip above them carries
+# eclipse, which is a separate channel and must not be confused with a mode.
+WASH_TOP = 0.94
+
+INK = "#0b0b0b"
+INK_SECONDARY = "#52514e"
+INK_MUTED = "#898781"
+BASELINE = "#c3c2b7"
+
+# One orbit per axis; this many axes per figure before starting a new file.
+ORBITS_PER_FIGURE = 6
 
 
 def make_all(cfg: MissionConfig, env: EnvironmentResult,
-             results: dict, out_dir: pathlib.Path) -> None:
+             results: dict, out_dir: pathlib.Path,
+             timelines: dict[str, ConopsResult] | None = None) -> None:
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
@@ -150,6 +180,200 @@ def make_all(cfg: MissionConfig, env: EnvironmentResult,
                                     limits=limits)
         else:
             _exclusion_heatmaps(sweep, out_dir, plt)
+
+    # -- battery power, one orbit per axis -----------------------------------
+    # Last, because it is the only figure that needs a full-rate scheduler
+    # timeline handed in: if the caller did not supply one, or the timeline
+    # disagrees with the summary, nothing above it is lost.
+    if timelines:
+        # Draw the geometry that is actually flyable -- the one with the best
+        # energy margin -- so the timeline shown is the one the mission would
+        # fly. Same rule the exclusion sweep uses to pick its reference.
+        def margin(name: str) -> float:
+            return float(results["geometries"][name]["conops_baseline"]
+                         ["energy_margin_w"])
+
+        choice = max(timelines, key=margin)
+        _battery_power(cfg, env, timelines[choice], out_dir, plt,
+                       geometry_name=choice,
+                       period_min=float(results["orbit"]["orbit_period_min"]))
+
+
+def _runs(values: np.ndarray) -> list[tuple[int, int, object]]:
+    """Contiguous runs of equal value as ``(start, stop_exclusive, value)``."""
+    if values.size == 0:
+        return []
+    change = np.flatnonzero(values[1:] != values[:-1]) + 1
+    edges = np.concatenate(([0], change, [values.size]))
+    return [(int(a), int(b), values[a]) for a, b in zip(edges[:-1], edges[1:])]
+
+
+def _orbit_segments(env: EnvironmentResult,
+                    period_s: float) -> list[tuple[int, int, float]]:
+    """Split the propagation at ascending-node crossings.
+
+    Returns ``(start, stop_exclusive, t_ref)`` per orbit, where ``t_ref`` is the
+    time the orbit began. The run almost never starts exactly on a node, so the
+    leading fragment gets a back-dated reference: that keeps its phase aligned
+    with the whole orbits drawn below it instead of shifting every feature by
+    however far into an orbit the epoch happened to fall.
+    """
+    z = env.r_BN_N[:, 2]
+    crossings = np.flatnonzero((z[:-1] < 0.0) & (z[1:] >= 0.0)) + 1
+    if crossings.size < 2:
+        return [(0, env.n_samples, float(env.t_s[0]))]
+    edges = np.concatenate(([0], crossings, [env.n_samples]))
+    segments = []
+    for a, b in zip(edges[:-1], edges[1:]):
+        if b - a < 2:
+            continue          # sub-sample sliver at either end
+        t_ref = (float(env.t_s[crossings[0]]) - period_s if a == 0
+                 else float(env.t_s[a]))
+        segments.append((int(a), int(b), t_ref))
+    return segments
+
+
+def _battery_power(cfg: MissionConfig, env: EnvironmentResult,
+                   timeline: ConopsResult, out_dir: pathlib.Path, plt,
+                   geometry_name: str, period_min: float) -> list[pathlib.Path]:
+    """Battery power against time, one orbit per axis, shaded by flown mode.
+
+    Two curves, both in watts so they share the one y axis:
+
+    * the power balance, generation minus load, which is what the battery is
+      being asked to absorb or supply;
+    * what the battery actually took, differenced from the SOC history. It
+      departs from the balance wherever the model clamps -- round-trip losses
+      on charge, the array shunted at a full battery, the discharge floor -- so
+      the gap between the two is exactly where stored energy is not the thing
+      limiting the vehicle.
+
+    Orbits share both axis ranges, so a feature can be read down the column
+    across successive orbits rather than only within one.
+    """
+    from matplotlib.lines import Line2D
+    from matplotlib.patches import Patch
+    from matplotlib.ticker import MaxNLocator
+
+    dt = env.dt_s
+    period_s = period_min * 60.0
+    segments = _orbit_segments(env, period_s)
+    if not segments:
+        return []
+
+    net_w = timeline.generation_w - timeline.load_w
+
+    battery = cfg.spacecraft.battery
+    capacity_wh = float(battery.capacity_wh)
+    level_wh = timeline.soc * capacity_wh
+    previous = np.concatenate(([float(battery.initial_soc) * capacity_wh],
+                               level_wh[:-1]))
+    battery_w = (level_wh - previous) * 3600.0 / dt
+
+    eclipsed = env.shadow_factor < 0.5      # same umbra test as the summary
+    mode_names = np.array([MODE_NAMES.get(int(m), "") for m in timeline.mode])
+
+    # One y range for every axis in every figure, so orbits are comparable.
+    # The headroom is lopsided on purpose: the top of the range is where the
+    # eclipse strip lives, and the curve must stay clear of it.
+    low = float(min(net_w.min(), battery_w.min()))
+    high = float(max(net_w.max(), battery_w.max()))
+    span = max(high - low, 1.0)
+    ylim = (low - 0.06 * span, high + 0.14 * span)
+
+    modes_seen = [name for name in MODE_WASH if np.any(mode_names == name)]
+    handles = [Patch(facecolor=MODE_WASH[name], alpha=MODE_WASH_ALPHA,
+                     edgecolor="none", label=name)
+               for name in modes_seen]
+    handles += [
+        Patch(facecolor=INK_SECONDARY, edgecolor="none",
+              label="eclipse (band at top)"),
+        Line2D([], [], color=INK, lw=1.3, label="generation - load"),
+        Line2D([], [], color=INK_SECONDARY, lw=1.1, ls=(0, (4, 2)),
+               label="into battery (after losses and limits)"),
+    ]
+
+    written: list[pathlib.Path] = []
+    numbered = list(enumerate(segments, start=1))
+    chunks = [numbered[i:i + ORBITS_PER_FIGURE]
+              for i in range(0, len(numbered), ORBITS_PER_FIGURE)]
+    for chunk_index, chunk in enumerate(chunks, start=1):
+        # Chrome is budgeted in inches, not in fractions, so a short final
+        # figure gets the same title and legend band as a full one instead of
+        # scaling them up with the page.
+        title_in, legend_in = 0.42, 0.8
+        height = 1.55 * len(chunk) + title_in + legend_in + 0.3
+        fig, axes = plt.subplots(len(chunk), 1, sharex=True, sharey=True,
+                                 figsize=(11, height))
+        axes = np.atleast_1d(axes)
+        for ax, (orbit_number, (start, stop, t_ref)) in zip(axes, chunk):
+            minutes = (env.t_s[start:stop] - t_ref) / 60.0
+            # Spans are drawn to the far edge of the last sample they cover,
+            # so consecutive spans meet instead of leaving a gap of a sample.
+            edge = np.concatenate((minutes, [minutes[-1] + dt / 60.0]))
+
+            for a, b, name in _runs(mode_names[start:stop]):
+                colour = MODE_WASH.get(str(name))
+                if colour is None:
+                    continue
+                ax.axvspan(edge[a], edge[b], ymin=0.0, ymax=WASH_TOP,
+                           facecolor=colour, alpha=MODE_WASH_ALPHA, lw=0,
+                           zorder=0)
+
+            # Eclipse rides in its own strip above the washes, and drops a
+            # hairline through the plot at each terminator crossing so a dip in
+            # the curve can be tied to it by eye. The strip is laid down as a
+            # full-width track first, so an unfilled stretch reads as "sunlit"
+            # rather than as somewhere the shading simply ran out.
+            ax.axvspan(edge[0], edge[-1], ymin=WASH_TOP, ymax=1.0,
+                       facecolor="#e1e0d9", lw=0, zorder=5)
+            for a, b, dark in _runs(eclipsed[start:stop]):
+                if not dark:
+                    continue
+                ax.axvspan(edge[a], edge[b], ymin=WASH_TOP, ymax=1.0,
+                           facecolor=INK_SECONDARY, lw=0, zorder=6)
+                for boundary in (edge[a], edge[b]):
+                    ax.axvline(boundary, color=INK_MUTED, lw=0.6,
+                               ls=(0, (2, 3)), zorder=1)
+
+            ax.axhline(0.0, color=BASELINE, lw=0.9, zorder=2)
+            ax.plot(minutes, battery_w[start:stop], color=INK_SECONDARY,
+                    lw=1.1, ls=(0, (4, 2)), zorder=3)
+            ax.plot(minutes, net_w[start:stop], color=INK, lw=1.3, zorder=4)
+
+            hours = env.t_s[start] / 3600.0
+            ax.set_title(f"orbit {orbit_number}   t = {hours:.2f} h",
+                         loc="left", fontsize=8, color=INK_SECONDARY, pad=3)
+            ax.set_ylim(*ylim)
+            # Pinned tick count: the rows are short, and letting the locator
+            # choose would give the last, shorter figure a different ladder
+            # from the full ones and break the read-down-the-column comparison.
+            ax.yaxis.set_major_locator(MaxNLocator(nbins=4, steps=[1, 2, 5, 10]))
+            ax.grid(axis="y", alpha=0.25, lw=0.6)
+            ax.tick_params(labelsize=8, colors=INK_MUTED)
+            for spine in ("top", "right"):
+                ax.spines[spine].set_visible(False)
+
+        axes[0].set_xlim(0.0, period_min)
+        axes[-1].set_xlabel("Minutes since ascending node", fontsize=9)
+        fig.supylabel("Battery power (W)   charge positive", fontsize=9)
+        first, last = chunk[0][0], chunk[-1][0]
+        fig.suptitle(f"Battery power over the CONOPS timeline -- "
+                     f"{geometry_name}, orbits {first}-{last} of "
+                     f"{len(segments)}", fontsize=11,
+                     y=1.0 - 0.27 / height)
+        # Anchored to the top of its reserved band rather than to the page, so
+        # it sits under the x label instead of at the far bottom edge.
+        fig.legend(handles=handles, loc="upper center",
+                   bbox_to_anchor=(0.5, legend_in / height), ncol=4,
+                   fontsize=8, frameon=False)
+        fig.tight_layout(rect=(0.02, legend_in / height, 1.0,
+                               1.0 - title_in / height))
+        name = out_dir / f"battery_power_{chunk_index:02d}.png"
+        fig.savefig(name, dpi=140)
+        plt.close(fig)
+        written.append(name)
+    return written
 
 
 def _shared_limits(grids: list[dict]) -> dict:

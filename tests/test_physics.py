@@ -601,3 +601,68 @@ def test_rotation_axis_angle_inverts_a_known_rotation():
     got_axis, got_angle = conops.rotation_axis_angle(np.eye(3), rot)
     assert got_angle == pytest.approx(angle)
     assert np.allclose(np.abs(got_axis), np.abs(axis))
+
+
+def test_runs_finds_contiguous_blocks():
+    from hs2sim.output import plots
+    values = np.array([1, 1, 2, 2, 2, 1])
+    assert plots._runs(values) == [(0, 2, 1), (2, 5, 2), (5, 6, 1)]
+    assert plots._runs(np.array([])) == []
+    assert plots._runs(np.array([7])) == [(0, 1, 7)]
+
+
+def orbit_env(n: int, dt: float, period: float, phase0: float = 0.0,
+              inclination_deg: float = 51.64) -> EnvironmentResult:
+    """Circular inclined orbit, so z crosses zero once per revolution."""
+    t = np.arange(n) * dt
+    theta = 2 * math.pi * t / period + phase0
+    r = R_EARTH + 415e3
+    inc = math.radians(inclination_deg)
+    pos = np.stack([r * np.cos(theta),
+                    r * np.sin(theta) * math.cos(inc),
+                    r * np.sin(theta) * math.sin(inc)], axis=1)
+    return EnvironmentResult(
+        t_s=t, r_BN_N=pos, v_BN_N=np.zeros((n, 3)),
+        r_sun_N=np.tile([1.496e11, 0.0, 0.0], (n, 1)),
+        shadow_factor=np.ones(n), b_field_N=np.zeros((n, 3)),
+        dcm_PN=np.tile(np.eye(3), (n, 1, 1)),
+        station_access=np.zeros((1, n), dtype=bool),
+        station_elevation=np.zeros((1, n)), station_range=np.full((1, n), 1e7),
+        station_names=["test"])
+
+
+def test_orbit_segments_split_at_ascending_nodes():
+    from hs2sim.output import plots
+    period, dt = 5580.0, 10.0
+    env = orbit_env(int(3.5 * period / dt), dt, period)
+    segments = plots._orbit_segments(env, period)
+    # Starting exactly on the node means no leading fragment: three whole
+    # orbits and a trailing half.
+    assert len(segments) == 4
+    for start, stop, _ in segments[:-1]:
+        assert (stop - start) * dt == pytest.approx(period, abs=2 * dt)
+
+
+def test_orbit_segments_backdate_a_partial_first_orbit():
+    from hs2sim.output import plots
+    period, dt = 5580.0, 10.0
+    # Start a quarter of the way into an orbit.
+    env = orbit_env(int(2.5 * period / dt), dt, period,
+                    phase0=math.pi / 2)
+    segments = plots._orbit_segments(env, period)
+    start, stop, t_ref = segments[0]
+    assert start == 0
+    # The epoch is a quarter of an orbit past the node, so the back-dated
+    # fragment occupies the last three quarters of the axis -- the phase it was
+    # actually flown at -- rather than being slid back to zero.
+    minutes = (env.t_s[start:stop] - t_ref) / 60.0
+    assert minutes[0] == pytest.approx(0.25 * period / 60.0, abs=0.5)
+    assert minutes[-1] == pytest.approx(period / 60.0, abs=0.5)
+    assert np.all(minutes <= period / 60.0 + 1e-9)
+
+
+def test_orbit_segments_fall_back_to_one_axis_when_too_short():
+    from hs2sim.output import plots
+    period, dt = 5580.0, 10.0
+    env = orbit_env(40, dt, period)
+    assert plots._orbit_segments(env, period) == [(0, 40, 0.0)]
