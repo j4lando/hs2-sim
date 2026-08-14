@@ -129,153 +129,55 @@ def _margin_subsection(sweep: dict, add) -> None:
         "geometry cannot tell the difference.\n")
 
 
-def _decomposition_table(add, table: dict, cone_label: str) -> None:
-    """quoted exclusion (rows) x attitude uncertainty (columns)."""
-    quoted = table["quoted_deg"]
-    uncertainty = table["uncertainty_deg"]
-    add(f"| {cone_label} \\ uncertainty | "
-        + " | ".join(f"{u:g} deg" for u in uncertainty) + " |")
-    add("| --- |" + " --- |" * len(uncertainty))
-    for r, q in enumerate(quoted):
-        cells = []
-        for c in range(len(uncertainty)):
-            cell = table["cells"][r][c]
-            if cell is None:
-                cells.append("--")
-                continue
-            if cell.get("fov_wall"):
-                cells.append("**FOV**")
-                continue
-            text = (f"{cell['effective_deg']:g} / "
-                    f"{cell['feasible_fraction'] * 100:.1f} %")
-            if cell.get("exceeds_hemisphere"):
-                text = f"*{text}*"
-            cells.append(text)
-        add(f"| **{q:g} deg** | " + " | ".join(cells) + " |")
-    add("")
-
-
-def _effective_angle_subsection(sweep: dict, add) -> None:
-    """How attitude uncertainty moves the effective keep-out half-angle."""
-    eff = sweep.get("effective_angle")
-    if not eff:
+def _uncertainty_grid_subsection(sweep: dict, add) -> None:
+    """One figure per ADCS uncertainty level, plus the numbers behind them."""
+    grids = sweep.get("uncertainty_grids")
+    if not grids:
         return
-    fov_wall = eff.get("fov_wall_deg")
-
-    add("### Effective keep-out half-angle\n")
-    add("Attitude uncertainty is applied in both directions, as it has to be: "
-        "a keep-**out** cone grows by the buffer and the keep-**in** field of "
-        "view shrinks by it. What the vehicle must actually respect is\n")
-    add("```")
-    add("effective half-angle = quoted exclusion + attitude uncertainty")
-    add("```")
-    add("")
-    add("Both terms land in the same inequality, so only their sum matters. "
-        "The tables below give **effective half-angle / feasible fraction** "
-        "for each combination. *Italic* cells are the ones this section exists "
-        "for: an effective half-angle past 90 deg, where the keep-out cone is "
-        "larger than a hemisphere.\n")
-    if fov_wall:
-        add(f"`FOV` marks cells killed by the other half of the treatment. "
-            f"FOUND's half field of view is {_fmt(fov_wall, '.0f')} deg, so at "
-            f"{_fmt(fov_wall, '.0f')} deg of uncertainty the shrink has "
-            f"consumed the entire field of view and no commanded attitude can "
-            f"guarantee the limb is in frame -- whatever the keep-outs say. "
-            f"That is a hard wall on the ADCS, independent of the payload "
-            f"requirement.\n")
-
-    add("> **Read these two tables as per-cone sensitivity, not as the cost of "
-        "uncertainty.** Each one moves a single cone and holds the other at "
-        "its nominal value. Real attitude uncertainty is a property of the "
-        "vehicle, so it inflates *every* keep-out at once, and the cones are "
-        "superadditive -- the combined cost is worse than either column "
-        "suggests. The third table below is the honest one for a pointing "
-        "budget.\n")
-
-    add(f"**Table A -- FOUND Sun keep-out (+x)**, with the +z cone held at "
-        f"nominal.\n")
-    _decomposition_table(add, eff["table_found"], "quoted")
-    add(f"**Table B -- LOST / star tracker keep-out (+z)**, Sun and Earth "
-        f"together, with FOUND held at nominal.\n")
-    _decomposition_table(add, eff["table_lost"], "quoted")
-
-    # -- both cones at once, which is what uncertainty actually does ---------
-    margin_rows = sorted(sweep.get("margin_sweep") or [],
-                         key=lambda r: r["margin_deg"])
+    fov_wall = sweep.get("fov_wall_deg")
+    lost = sweep["lost_deg"]
+    found = sweep["found_deg"]
     base = sweep.get("baseline", {})
-    if margin_rows and "lost_deg" in base and "found_deg" in base:
-        add("**Table C -- both cones inflated together.** This is what a real "
-            "pointing budget does, and it is the row to quote. Every keep-out "
-            "carries the uncertainty simultaneously.\n")
-        add("| Uncertainty | Effective FOUND | Effective +z | Feasible | "
-            "vs Table A alone |")
-        add("| --- | --- | --- | --- | --- |")
-        found_by_angle = {r["effective_deg"]: r["feasible_fraction"]
-                          for r in eff["found"]}
-        for row in margin_rows:
-            u = row["margin_deg"]
-            eff_found = base["found_deg"] + u
-            eff_lost = base["lost_deg"] + u
-            solo = found_by_angle.get(eff_found)
-            delta = ("--" if solo is None else
-                     _fmt((row["feasible_fraction"] - solo) * 100, '+.1f') + " pp")
-            hemi = " *(> 90)*" if eff_found > 90.0 else ""
-            add(f"| {u:g} deg | {eff_found:g} deg{hemi} | {eff_lost:g} deg | "
-                f"{_fmt(row['feasible_fraction'] * 100, '.1f')} % | {delta} |")
-        add("")
-        add("The last column is the size of the mistake you would make by "
-            "reading Table A on its own. It is negative everywhere the "
-            "uncertainty is large, which is the superadditivity: the two "
-            "keep-outs exclude different arcs of the roll circle, so inflating "
-            "both removes attitudes that inflating either one alone would have "
-            "left available.\n")
+    r0 = lost.index(base["lost_deg"]) if base.get("lost_deg") in lost else 0
+    c0 = found.index(base["found_deg"]) if base.get("found_deg") in found else 0
 
-    # -- beyond 90 deg -------------------------------------------------------
-    add("**What changes past 90 degrees.** Below 90 deg a keep-out removes a "
-        "cap from the sky and leaves most of it. At exactly 90 deg it removes "
-        "a hemisphere. Past 90 deg the *allowed* region is what is left of the "
-        "opposite hemisphere: a cap of half-angle `180 - effective` about the "
-        "anti-Sun direction, which shrinks to a point at 180 deg. So the "
-        "constraint stops being \"avoid the Sun\" and becomes \"point almost "
-        "directly away from it\", which is a different pointing problem and "
-        "one the limb requirement usually cannot also satisfy.\n")
-    add("| Effective half-angle | Allowed cap about anti-Sun | FOUND feasible |")
-    add("| --- | --- | --- |")
-    for row in eff["found"]:
-        if row["effective_deg"] < 80.0:
-            continue
-        add(f"| {row['effective_deg']:g} deg"
-            + (" *(> hemisphere)*" if row["exceeds_hemisphere"] else "")
-            + f" | {row['allowed_cap_half_angle_deg']:g} deg | "
-            f"{_fmt(row['feasible_fraction'] * 100, '.1f')} % |")
+    add("### The trade at each level of ADCS uncertainty\n")
+    add("Attitude uncertainty inflates **every** keep-out at once, so its "
+        "effect is not something one column of a table can carry. The whole "
+        "trade is instead re-solved at each level and drawn as its own figure. "
+        "Compare them side by side; the axes are labelled with the quoted "
+        "angle and, in brackets, the effective half-angle the geometry "
+        "actually enforces.\n")
+    add("| ADCS uncertainty | Figure | Baseline cell | Effective at baseline | "
+        "Best cell | Worst cell |")
+    add("| --- | --- | --- | --- | --- | --- |")
+    for grid in grids:
+        u = float(grid["pointing_margin_deg"])
+        mat = grid["matrices"]["feasible_fraction"]
+        add(f"| {u:.2f} deg | `{grid['figure_name']}` | "
+            f"{_fmt(mat[r0][c0] * 100, '.1f')} % | "
+            f"{base.get('lost_deg', 0) + u:g} / {base.get('found_deg', 0) + u:g} deg"
+            + (" *(> 90)*" if base.get("found_deg", 0) + u > 90 else "")
+            + f" | {_fmt(max(max(r) for r in mat) * 100, '.1f')} % | "
+            f"{_fmt(min(min(r) for r in mat) * 100, '.1f')} % |")
     add("")
-
-    # -- additivity check ----------------------------------------------------
-    checks = eff.get("additivity_check") or []
-    worst = eff.get("max_additivity_difference_pp")
-    if checks and worst is not None:
-        add(f"**Check that the two terms really add.** The tables are built "
-            f"from sweeps over the *sum*, which is only valid if carrying u "
-            f"degrees as a buffer behaves identically to folding u into every "
-            f"quoted angle. The two travel through different code -- one is "
-            f"read from the config, the other is a float added inside the "
-            f"solver -- so it is measured rather than asserted:\n")
-        add("| Uncertainty | As a buffer | Folded into every cone | "
-            "Difference |")
-        add("| --- | --- | --- | --- |")
-        for row in checks:
-            note = "  (FOV wall, expected)" if row["fov_wall_tripped"] else ""
-            add(f"| {row['uncertainty_deg']:g} deg | "
-                f"{_fmt(row['as_buffer_feasible'] * 100, '.1f')} % | "
-                f"{_fmt(row['as_wider_cones_feasible'] * 100, '.1f')} % | "
-                f"{_fmt(row['difference_pp'], '+.2f')} pp{note} |")
-        add("")
-        add(f"Worst disagreement {_fmt(worst, '.2f')} percentage points below "
-            f"the FOV wall, so the decomposition holds: a degree of ADCS "
-            f"performance and a degree of optical keep-out are the same "
-            f"degree. Above the wall the two paths are *supposed* to diverge, "
-            f"because widening a keep-out does not shrink the field of view "
-            f"and carrying the same number as attitude uncertainty does.\n")
+    if fov_wall:
+        add(f"Nothing is drawn at or beyond **{_fmt(fov_wall, '.0f')} deg** of "
+            f"uncertainty. That is FOUND's half field of view, and the "
+            f"keep-*in* half of the treatment shrinks the usable field of view "
+            f"to nothing there: no commanded attitude can guarantee the limb is "
+            f"in frame, whatever the keep-outs say. It is a hard ADCS "
+            f"requirement independent of the payload's exclusion angles.\n")
+    add("Two things to read off the figures. First, where the effective "
+        "half-angle passes 90 deg the keep-out cone is **larger than a "
+        "hemisphere**: the allowed region for that boresight is no longer the "
+        "sky minus a cap but a cap of half-angle `180 - effective` about the "
+        "anti-Sun direction, shrinking to a point at 180 deg. At 20 deg of "
+        "uncertainty the 70 deg quoted FOUND exclusion is already at an "
+        "effective 90 deg, and the 90 deg column is at 110 deg. Second, the "
+        "grids do not simply shift: the flat region where the +z cone costs "
+        "nothing shrinks from the bottom as uncertainty grows, because the "
+        "uncertainty is spending that same slack.\n")
 
 
 def _exclusion_section(sweep: dict, add) -> None:
@@ -554,7 +456,7 @@ def _exclusion_section(sweep: dict, add) -> None:
                     "fix on the Sun side keeps its value only as long as the "
                     "Earth exclusion stays where it is.\n")
     _margin_subsection(sweep, add)
-    _effective_angle_subsection(sweep, add)
+    _uncertainty_grid_subsection(sweep, add)
 
     add("**What the cones cannot fix.** `No sunlit limb` is the largest "
         "rejection over most of the grid and it barely moves"
@@ -787,13 +689,40 @@ def write_report(cfg: MissionConfig, results: dict, path: pathlib.Path) -> None:
             f"trade.")
     add("")
 
-    add("| Slew | Best (min) | Median (min) | 10th percentile field (min) |")
-    add("| --- | --- | --- | --- |")
+    add("Slew time is not one number for a magnetically actuated vehicle. The "
+        "achievable torque `m x B` always lies in the plane perpendicular to "
+        "the field, so there is **no** authority about an axis parallel to "
+        "`B` -- a manoeuvre that has to turn about the field direction cannot "
+        "start, and has to wait for the geometry to rotate. Each row below is "
+        "the distribution over 24 eigenaxis directions and 16 start phases, "
+        "integrating a bang-bang profile through the real field history rather "
+        "than evaluating a constant-torque formula.\n")
+    add("| Slew | Best | Median | 90th pct | Worst | Eigenaxis along B | "
+        "Constant-torque formula |")
+    add("| --- | --- | --- | --- | --- | --- | --- |")
     for name, row in adcs_res["slew_times"].items():
-        add(f"| {name} | {_fmt(row['best_s'] / 60, '.1f')} | "
-            f"{_fmt(row['median_s'] / 60, '.1f')} | "
-            f"{_fmt(row['p10_s'] / 60, '.1f')} |")
+        add(f"| {name} | {_fmt(row.get('best_s', 0) / 60, '.1f')} min | "
+            f"{_fmt(row.get('median_s', 0) / 60, '.1f')} min | "
+            f"{_fmt(row.get('p90_s', 0) / 60, '.1f')} min | "
+            f"{_fmt(row.get('worst_s', 0) / 60, '.1f')} min | "
+            f"{_fmt(row.get('worst_axis_s', 0) / 60, '.1f')} min | "
+            f"{_fmt(row.get('constant_torque_s', 0) / 60, '.1f')} min |")
     add("")
+    ninety = adcs_res["slew_times"].get("90deg", {})
+    if "worst_s" in ninety:
+        add(f"The spread is the finding. A 90 deg repoint takes "
+            f"{_fmt(ninety['median_s'] / 60, '.1f')} min typically but "
+            f"{_fmt(ninety['worst_s'] / 60, '.1f')} min in the worst geometry, "
+            f"and {_fmt(ninety['worst_axis_s'] / 60, '.1f')} min when the "
+            f"eigenaxis starts along the field. The constant-torque formula "
+            f"says {_fmt(ninety['constant_torque_s'] / 60, '.1f')} min for all "
+            f"of them, which is why it is only shown for comparison: it is "
+            f"close to the median and blind to the tail, and the tail is what "
+            f"breaks a schedule. Nothing is actually unreachable "
+            f"({_fmt(ninety.get('unreachable_fraction', 0) * 100, '.0f')} % of "
+            f"sampled manoeuvres failed to complete) -- the field sweeps "
+            f"through a large angle every orbit, so a slew that cannot start "
+            f"now can start a few minutes later.\n")
 
     dist = adcs_res["disturbances"]
     add(f"Disturbance torques: gravity gradient "
@@ -875,7 +804,7 @@ def write_report(cfg: MissionConfig, results: dict, path: pathlib.Path) -> None:
     # -- CONOPS -------------------------------------------------------------
     add("## CONOPS mode split (baseline 0.2 Hz)\n")
     add("| Geometry | Standby | Experiment | Downlink | Slew | Slews/day | "
-        "Energy margin (W) | Peak tracking rate |")
+        "Energy margin (W) | Slew median / p90 / max |")
     add("| --- | --- | --- | --- | --- | --- | --- | --- |")
     for name, entry in results["geometries"].items():
         c = entry["conops_baseline"]
@@ -885,8 +814,16 @@ def write_report(cfg: MissionConfig, results: dict, path: pathlib.Path) -> None:
             f"{_fmt(c['frac_slew'] * 100, '.1f')} % | "
             f"{_fmt(c['slews_per_day'], '.0f')} | "
             f"{_fmt(c['energy_margin_w'], '.2f')} | "
-            f"{_fmt(c['max_tracking_rate_dps'], '.3f')} deg/s |")
+            f"{_fmt(c.get('planned_slew_median_min'), '.1f')} / "
+            f"{_fmt(c.get('planned_slew_p90_min'), '.1f')} / "
+            f"{_fmt(c.get('planned_slew_max_min'), '.1f')} min |")
     add("")
+    add("Every slew in the scheduler is priced against the field the vehicle "
+        "actually has: its eigenaxis, the inertia about that axis, and the "
+        "authority `sum_i m_i |(B x e)_i|` available about it over the "
+        "following orbits. That is why the maximum is several times the "
+        "median -- a repoint that has to turn about the field direction waits "
+        "for the geometry before it can even start.\n")
     add("Peak tracking rate is how fast the target attitude moves while "
         "following a limb or a ground station. Compare it against the rate the "
         "magnetorquers can sustain: at the mean control torque above, spinning "

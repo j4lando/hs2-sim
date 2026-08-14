@@ -136,8 +136,31 @@ def make_all(cfg: MissionConfig, env: EnvironmentResult,
 
     # -- exclusion-angle trade -----------------------------------------------
     if "exclusion_sweep" in results:
-        _exclusion_heatmaps(results["exclusion_sweep"], out_dir, plt)
-        _margin_curve(results["exclusion_sweep"], out_dir, plt)
+        sweep = results["exclusion_sweep"]
+        _margin_curve(sweep, out_dir, plt)
+        grids = sweep.get("uncertainty_grids") or []
+        if grids:
+            # One figure per ADCS uncertainty level, on shared colour scales so
+            # they can actually be compared side by side -- per-figure
+            # autoscaling would make a collapsing grid look unchanged.
+            limits = _shared_limits(grids)
+            for grid in grids:
+                _exclusion_heatmaps(grid, out_dir, plt,
+                                    filename=grid["figure_name"],
+                                    limits=limits)
+        else:
+            _exclusion_heatmaps(sweep, out_dir, plt)
+
+
+def _shared_limits(grids: list[dict]) -> dict:
+    """Common colour range per panel across a family of grids."""
+    limits: dict[str, tuple[float, float]] = {}
+    for key in ("feasible_fraction", "images_per_day_ceiling",
+                "images_per_day", "energy_margin_w"):
+        values = [v for g in grids for row in g["matrices"][key] for v in row]
+        if values:
+            limits[key] = (min(values), max(values))
+    return limits
 
 
 def _margin_curve(sweep: dict, out_dir: pathlib.Path, plt) -> None:
@@ -180,7 +203,9 @@ def _margin_curve(sweep: dict, out_dir: pathlib.Path, plt) -> None:
     plt.close(fig)
 
 
-def _exclusion_heatmaps(sweep: dict, out_dir: pathlib.Path, plt) -> None:
+def _exclusion_heatmaps(sweep: dict, out_dir: pathlib.Path, plt,
+                        filename: str = "exclusion_sweep.png",
+                        limits: dict | None = None) -> None:
     lost = sweep["lost_deg"]
     found = sweep["found_deg"]
     mat = sweep["matrices"]
@@ -201,13 +226,28 @@ def _exclusion_heatmaps(sweep: dict, out_dir: pathlib.Path, plt) -> None:
     fig, axes = plt.subplots(2, 2, figsize=(11, 8.5))
     for ax, (key, title, scale, cell_fmt, cmap) in zip(axes.ravel(), panels):
         data = np.array(mat[key], dtype=float) * scale
-        im = ax.imshow(data, origin="lower", aspect="auto", cmap=cmap)
+        span = (limits or {}).get(key)
+        im = ax.imshow(data, origin="lower", aspect="auto", cmap=cmap,
+                       vmin=None if span is None else span[0] * scale,
+                       vmax=None if span is None else span[1] * scale)
+        margin = float(sweep.get("pointing_margin_deg") or 0.0)
         ax.set_xticks(np.arange(len(found)))
-        ax.set_xticklabels([f"{v:.0f}" for v in found])
         ax.set_yticks(np.arange(len(lost)))
-        ax.set_yticklabels([f"{v:.0f}" for v in lost])
-        ax.set_xlabel("FOUND Sun exclusion (deg)")
-        ax.set_ylabel("LOST / star tracker exclusion (deg)")
+        if margin > 0:
+            # Quoted angle with the effective half-angle it becomes once the
+            # attitude uncertainty is added -- that is the number the geometry
+            # actually enforces, and past 90 deg the cone exceeds a hemisphere.
+            ax.set_xticklabels([f"{v:.0f}\n({v + margin:.0f})" for v in found],
+                               fontsize=8)
+            ax.set_yticklabels([f"{v:.0f}\n({v + margin:.0f})" for v in lost],
+                               fontsize=8)
+            ax.set_xlabel("FOUND Sun exclusion: quoted (effective) deg")
+            ax.set_ylabel("LOST / star tracker: quoted (effective) deg")
+        else:
+            ax.set_xticklabels([f"{v:.0f}" for v in found])
+            ax.set_yticklabels([f"{v:.0f}" for v in lost])
+            ax.set_xlabel("FOUND Sun exclusion (deg)")
+            ax.set_ylabel("LOST / star tracker exclusion (deg)")
         ax.set_title(title, fontsize=10)
         for r in range(len(lost)):
             for c in range(len(found)):
@@ -228,10 +268,12 @@ def _exclusion_heatmaps(sweep: dict, out_dir: pathlib.Path, plt) -> None:
             ax.add_patch(plt.Rectangle((c - 0.5, r - 0.5), 1, 1, fill=False,
                                        edgecolor="#00ff88", lw=2.0))
 
+    margin = float(sweep.get("pointing_margin_deg") or 0.0)
     fig.suptitle(
-        f"Camera exclusion-angle trade ({sweep.get('reference_geometry', '')}, "
-        f"{sweep['payload_rate_hz']:.2f} Hz) -- green box is the baseline",
+        f"Camera exclusion-angle trade  |  ADCS uncertainty "
+        f"{margin:.2f} deg  |  {sweep.get('reference_geometry', '')}, "
+        f"{sweep['payload_rate_hz']:.2f} Hz  |  green box is the baseline",
         fontsize=11)
-    fig.tight_layout(rect=(0, 0, 1, 0.96))
-    fig.savefig(out_dir / "exclusion_sweep.png", dpi=140)
+    fig.tight_layout(rect=(0, 0, 1, 0.95))
+    fig.savefig(out_dir / filename, dpi=140)
     plt.close(fig)

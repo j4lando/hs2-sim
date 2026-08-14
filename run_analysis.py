@@ -139,7 +139,7 @@ def main() -> int:
     # -------------------------------------------------------------- ADCS
     log("Evaluating magnetorquer authority...")
     authority = adcs.torque_authority(cfg, env)
-    slews = {f"{angle}deg": adcs.slew_time_profile(cfg, authority, angle)
+    slews = {f"{angle}deg": adcs.slew_time_profile(cfg, authority, angle, env=env)
              for angle in (10, 30, 60, 90, 180)}
     results["adcs"] = {
         "dipole_am2": adcs.dipole_vector(cfg).tolist(),
@@ -161,7 +161,9 @@ def main() -> int:
             cfg, env, authority, period_s),
     }
     log(f"  mean control torque {authority.mean_max_torque_nm*1e6:.2f} uN m, "
-        f"90 deg slew ~{slews['90deg']['median_s']/60:.1f} min")
+        f"90 deg slew median {slews['90deg']['median_s']/60:.1f} min, "
+        f"p90 {slews['90deg']['p90_s']/60:.1f} min, "
+        f"eigenaxis-along-B {slews['90deg']['worst_axis_s']/60:.1f} min")
 
     # ------------------------------------------------ payload rate ceilings
     usb_fps = comms.usb2_max_fps(cfg)
@@ -366,48 +368,45 @@ def main() -> int:
         sweep_result["margin_character"] = exclusion.margin_characterise(
             sweep_result, adcs.pointing_margin_deg(cfg))
 
-        # -- effective half-angle: quoted exclusion + attitude uncertainty ----
-        eff_cfg = sweep_cfg.effective_angle
+        # -- the same grid redrawn at each ADCS uncertainty level -----------
+        # Uncertainty inflates every keep-out at once, so the honest way to
+        # show its effect is to re-solve the whole trade at each level and put
+        # the figures side by side, rather than tabulate sums.
         fov_wall = float(cfg.spacecraft.sensors.found_camera.fov_full_deg) / 2.0
-        log("  sweeping effective keep-out half-angle (past 90 deg, where the "
-            "cone exceeds a hemisphere)...")
-        # Solve every effective angle the tables will ask for, plus whatever
-        # extra points the config wants for the beyond-90 narrative. Deriving
-        # the list from the table axes is what keeps the tables free of holes.
-        def needed(quoted, extra):
-            wanted = {float(q) + float(u)
-                      for q in quoted
-                      for u in eff_cfg.table_uncertainty_deg
-                      if float(u) < fov_wall}
-            return sorted(wanted | {float(v) for v in extra})
-
-        eff_found = exclusion.effective_angle_sweep(
-            cfg, env, array_by_name[reference], "found",
-            needed(eff_cfg.table_quoted_found_deg, eff_cfg.found_deg),
-            n_grid=n_grid, log=log)
-        eff_lost = exclusion.effective_angle_sweep(
-            cfg, env, array_by_name[reference], "lost",
-            needed(eff_cfg.table_quoted_lost_deg, eff_cfg.lost_deg),
-            n_grid=n_grid, log=log)
-        log("  checking that quoted exclusion and uncertainty really add...")
-        additivity = exclusion.additivity_check(
-            cfg, env, array_by_name[reference], [0.0, 1.1, 5.0, 10.0, 20.0, 40.0],
-            n_grid=n_grid, log=log)
-        sweep_result["effective_angle"] = {
-            "fov_wall_deg": fov_wall,
-            "found": eff_found,
-            "lost": eff_lost,
-            "additivity_check": additivity,
-            "max_additivity_difference_pp": max(
-                (abs(r["difference_pp"]) for r in additivity
-                 if not r["fov_wall_tripped"]), default=None),
-            "table_found": exclusion.decomposition_table(
-                eff_found, eff_cfg.table_quoted_found_deg,
-                eff_cfg.table_uncertainty_deg, fov_wall_deg=fov_wall),
-            "table_lost": exclusion.decomposition_table(
-                eff_lost, eff_cfg.table_quoted_lost_deg,
-                eff_cfg.table_uncertainty_deg, fov_wall_deg=fov_wall),
-        }
+        grids = []
+        for uncertainty in sweep_cfg.grid_uncertainty_deg:
+            if float(uncertainty) >= fov_wall:
+                log(f"  skipping uncertainty {float(uncertainty):.1f} deg: at or "
+                    f"past FOUND's {fov_wall:.0f} deg half field of view, the "
+                    f"keep-in shrink alone makes every attitude illegal")
+                continue
+            log(f"  exclusion grid at ADCS uncertainty "
+                f"{float(uncertainty):.2f} deg...")
+            grid = exclusion.sweep(
+                cfg, env, array_by_name[reference], standby_attitudes[reference],
+                authority, passes,
+                lost_deg=sweep_cfg.lost_deg, found_deg=sweep_cfg.found_deg,
+                n_grid=n_grid, payload_rate_hz=rate,
+                pointing_margin_deg=float(uncertainty), log=None)
+            grid["reference_geometry"] = reference
+            grid["baseline"] = {"lost_deg": baseline_lost,
+                                "found_deg": baseline_found}
+            # The as-designed level keeps the plain name, so the headline
+            # figure referenced elsewhere is the one the mission actually flies
+            # and no duplicate image is written.
+            grid["figure_name"] = (
+                "exclusion_sweep.png"
+                if abs(float(uncertainty) - adcs.pointing_margin_deg(cfg)) < 1e-9
+                else f"exclusion_sweep_u{float(uncertainty):g}".replace(".", "p")
+                     + ".png")
+            grid["character"] = exclusion.characterise(grid)
+            grids.append(grid)
+            log(f"    feasible at the baseline cell "
+                f"{grid['matrices']['feasible_fraction'][sweep_cfg.lost_deg.index(40)][sweep_cfg.found_deg.index(70)]*100:.1f} %"
+                f", best {max(max(r) for r in grid['matrices']['feasible_fraction'])*100:.1f} %"
+                f", worst {min(min(r) for r in grid['matrices']['feasible_fraction'])*100:.1f} %")
+        sweep_result["uncertainty_grids"] = grids
+        sweep_result["fov_wall_deg"] = fov_wall
 
         sweep_result["character"] = exclusion.characterise(sweep_result)
         results["exclusion_sweep"] = sweep_result

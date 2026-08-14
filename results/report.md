@@ -93,7 +93,7 @@ Both keep-out cones were swept and the whole pipeline re-run at each grid point 
 
 `LOST` moves the +z keep-out against **both** Sun and Earth (the requirement quotes one angle for both, and the star tracker shares that face). `FOUND` moves FOUND's Sun keep-out only -- its 74 deg field of view is an optical property and does not move. The baseline cell is in **bold**.
 
-**Sanity check.** The sweep re-solves pointing on a coarser azimuth/roll grid than the headline run, so the baseline cell has to reproduce the headline result or the whole sweep is biased. It does: 49.3 % feasible here against 50.1 % at 48x48. The coarse grid is not losing legal attitudes. Realised images differ by more (5,711 against 5,339 per day), which is the scheduler sensitivity discussed under table 3, not a feasibility difference.
+**Sanity check.** The sweep re-solves pointing on a coarser azimuth/roll grid than the headline run, so the baseline cell has to reproduce the headline result or the whole sweep is biased. It does: 49.3 % feasible here against 50.1 % at 48x48. The coarse grid is not losing legal attitudes. Realised images differ by more (5,217 against 5,522 per day), which is the scheduler sensitivity discussed under table 3, not a feasibility difference.
 
 ### 1. Fraction of the timeline with a legal experiment attitude
 
@@ -129,15 +129,15 @@ What survives after slews, downlink passes and battery holds take their share. R
 
 | Images/day | FOUND 50 deg | FOUND 60 deg | FOUND 70 deg | FOUND 80 deg | FOUND 90 deg |
 | --- | --- | --- | --- | --- | --- |
-| **LOST 20 deg** | 6,021 | 5,685 | 5,503 | 5,350 | 5,410 |
-| **LOST 30 deg** | 5,842 | 5,611 | 5,540 | 5,133 | 5,016 |
-| **LOST 40 deg** | 5,963 | 5,749 | **5,711** | 4,946 | 4,857 |
-| **LOST 50 deg** | 6,172 | 5,541 | 5,879 | 5,270 | 5,262 |
-| **LOST 60 deg** | 4,761 | 4,527 | 4,383 | 3,928 | 4,155 |
-| **LOST 70 deg** | 3,319 | 3,269 | 2,881 | 2,634 | 2,709 |
-| **LOST 80 deg** | 2,211 | 2,036 | 1,756 | 1,585 | 1,743 |
+| **LOST 20 deg** | 5,826 | 5,532 | 5,280 | 5,351 | 5,173 |
+| **LOST 30 deg** | 5,862 | 5,649 | 5,309 | 4,832 | 4,689 |
+| **LOST 40 deg** | 5,725 | 5,472 | **5,217** | 4,626 | 4,505 |
+| **LOST 50 deg** | 6,205 | 5,757 | 5,417 | 4,883 | 4,705 |
+| **LOST 60 deg** | 6,123 | 5,759 | 5,243 | 4,953 | 4,876 |
+| **LOST 70 deg** | 3,652 | 4,021 | 3,743 | 3,611 | 3,507 |
+| **LOST 80 deg** | 2,459 | 2,378 | 2,037 | 2,045 | 1,883 |
 
-**Read table 3 with care.** Several cells in it share an *identical* feasibility -- the +z cone does nothing at all over part of its range -- yet their realised image counts differ by up to 553 images/day (11 %). That spread is not the cone doing anything. Changing a keep-out changes which rolls are legal, which changes the attitude the solver picks among equally legal options, which changes where the large repoints land; with ~50 % of the timeline in slew, that is a big lever and it is essentially chaotic. Treat 553 images/day as the noise floor of table 3, and trade on tables 1 and 2 instead.
+**Read table 3 with care.** Several cells in it share an *identical* feasibility -- the +z cone does nothing at all over part of its range -- yet their realised image counts differ by up to 725 images/day (15 %). That spread is not the cone doing anything. Changing a keep-out changes which rolls are legal, which changes the attitude the solver picks among equally legal options, which changes where the large repoints land; with ~50 % of the timeline in slew, that is a big lever and it is essentially chaotic. Treat 725 images/day as the noise floor of table 3, and trade on tables 1 and 2 instead.
 
 ### 4. Energy margin (W)
 
@@ -145,13 +145,13 @@ A looser cone is not free: more experiment time means less sun-pointing, and the
 
 | Margin (W) | FOUND 50 deg | FOUND 60 deg | FOUND 70 deg | FOUND 80 deg | FOUND 90 deg |
 | --- | --- | --- | --- | --- | --- |
-| **LOST 20 deg** | +0.73 | +0.85 | +1.04 | +1.17 | +1.38 |
-| **LOST 30 deg** | +0.69 | +0.91 | +1.19 | +1.21 | +1.40 |
-| **LOST 40 deg** | +0.68 | +0.89 | **+1.14** | +1.08 | +1.21 |
-| **LOST 50 deg** | +0.59 | +0.76 | +1.12 | +1.21 | +1.27 |
-| **LOST 60 deg** | +0.62 | +0.82 | +1.15 | +1.23 | +1.41 |
-| **LOST 70 deg** | +1.02 | +1.23 | +1.36 | +1.45 | +1.57 |
-| **LOST 80 deg** | +1.76 | +2.11 | +2.36 | +2.54 | +2.70 |
+| **LOST 20 deg** | +0.82 | +0.93 | +1.14 | +1.19 | +1.33 |
+| **LOST 30 deg** | +0.76 | +0.97 | +1.28 | +1.21 | +1.41 |
+| **LOST 40 deg** | +0.71 | +0.93 | **+1.34** | +1.36 | +1.60 |
+| **LOST 50 deg** | +0.65 | +0.87 | +1.22 | +1.19 | +1.40 |
+| **LOST 60 deg** | +0.77 | +1.03 | +1.30 | +1.34 | +1.49 |
+| **LOST 70 deg** | +1.15 | +1.36 | +1.68 | +1.78 | +1.85 |
+| **LOST 80 deg** | +1.82 | +2.12 | +2.48 | +2.58 | +2.78 |
 
 ### Sensitivity at the baseline
 
@@ -216,17 +216,17 @@ The tables above use **1.10 deg**. This sub-sweep moves only that buffer, with t
 
 | Buffer (deg) | Feasible | Image ceiling | Images/day | Sun in FOUND | No legal roll |
 | --- | --- | --- | --- | --- | --- |
-| 0.00 | 49.4 % | 17,074 | 5,639 | 8.9 % | 0.0 % |
-| 0.50 | 49.3 % | 17,047 | 5,664 | 9.0 % | 0.0 % |
-| **1.10** | **49.3 %** | 17,047 | 5,711 | 9.0 % | 0.0 % |
-| 2.00 | 49.3 % | 17,047 | 5,301 | 9.0 % | 0.0 % |
-| 3.00 | 49.3 % | 17,047 | 5,160 | 9.0 % | 0.0 % |
-| 5.00 | 49.3 % | 17,047 | 4,702 | 9.0 % | 0.0 % |
-| 10.00 | 49.1 % | 16,966 | 5,181 | 9.2 % | 0.0 % |
-| 11.10 | 48.1 % | 16,617 | 5,270 | 10.2 % | 0.0 % |
-| 15.00 | 47.0 % | 16,259 | 4,588 | 11.2 % | 0.0 % |
-| 20.00 | 43.1 % | 14,886 | 4,513 | 11.2 % | 4.0 % |
-| 21.10 | 41.0 % | 14,167 | 4,155 | 11.4 % | 5.9 % |
+| 0.00 | 49.4 % | 17,074 | 5,163 | 8.9 % | 0.0 % |
+| 0.50 | 49.3 % | 17,047 | 5,352 | 9.0 % | 0.0 % |
+| **1.10** | **49.3 %** | 17,047 | 5,217 | 9.0 % | 0.0 % |
+| 2.00 | 49.3 % | 17,047 | 5,231 | 9.0 % | 0.0 % |
+| 3.00 | 49.3 % | 17,047 | 5,143 | 9.0 % | 0.0 % |
+| 5.00 | 49.3 % | 17,047 | 4,582 | 9.0 % | 0.0 % |
+| 10.00 | 49.1 % | 16,966 | 5,562 | 9.2 % | 0.0 % |
+| 11.10 | 48.1 % | 16,617 | 4,883 | 10.2 % | 0.0 % |
+| 15.00 | 47.0 % | 16,259 | 4,581 | 11.2 % | 0.0 % |
+| 20.00 | 43.1 % | 14,886 | 5,052 | 11.2 % | 4.0 % |
+| 21.10 | 41.0 % | 14,167 | 4,876 | 11.4 % | 5.9 % |
 
 **The pointing budget is very nearly free at its current size, and the sweep says exactly how much room there is.** The as-designed 1.10 deg buffer costs 0.08 percentage points of feasible time against a hypothetical perfect pointer, and feasibility is unchanged all the way out to **5 deg**, only starting to move at 10 deg. That is not luck and it is not a modelling artefact: it is the +z slack from the cone sweep, spent on pointing error instead of on keep-out. In other words the vehicle can miss its pointing spec by a factor of 5 before the geometry charges anything at all for it.
 
@@ -236,85 +236,21 @@ Past that the price accelerates hard: 0.40 pp/deg averaged over the whole swept 
 
 One thing to be clear about: this is a *hard* constraint on feasibility, not a soft pointing requirement. An attitude that cannot hold the buffer is not counted at all, so an ADCS that misses its spec does not blur images here -- it removes observations from the timeline. The flip side is the useful part for ADCS: there is no science argument for tightening the pointing budget below its current 1.10 deg, because the geometry cannot tell the difference.
 
-### Effective keep-out half-angle
+### The trade at each level of ADCS uncertainty
 
-Attitude uncertainty is applied in both directions, as it has to be: a keep-**out** cone grows by the buffer and the keep-**in** field of view shrinks by it. What the vehicle must actually respect is
+Attitude uncertainty inflates **every** keep-out at once, so its effect is not something one column of a table can carry. The whole trade is instead re-solved at each level and drawn as its own figure. Compare them side by side; the axes are labelled with the quoted angle and, in brackets, the effective half-angle the geometry actually enforces.
 
-```
-effective half-angle = quoted exclusion + attitude uncertainty
-```
+| ADCS uncertainty | Figure | Baseline cell | Effective at baseline | Best cell | Worst cell |
+| --- | --- | --- | --- | --- | --- |
+| 0.00 deg | `exclusion_sweep_u0.png` | 49.4 % | 40 / 70 deg | 53.5 % | 18.6 % |
+| 1.10 deg | `exclusion_sweep.png` | 49.3 % | 41.1 / 71.1 deg | 53.5 % | 17.3 % |
+| 5.00 deg | `exclusion_sweep_u5.png` | 49.3 % | 45 / 75 deg | 53.5 % | 11.2 % |
+| 10.00 deg | `exclusion_sweep_u10.png` | 49.1 % | 50 / 80 deg | 51.5 % | 0.0 % |
+| 20.00 deg | `exclusion_sweep_u20.png` | 43.1 % | 60 / 90 deg | 49.4 % | 0.0 % |
 
-Both terms land in the same inequality, so only their sum matters. The tables below give **effective half-angle / feasible fraction** for each combination. *Italic* cells are the ones this section exists for: an effective half-angle past 90 deg, where the keep-out cone is larger than a hemisphere.
+Nothing is drawn at or beyond **37 deg** of uncertainty. That is FOUND's half field of view, and the keep-*in* half of the treatment shrinks the usable field of view to nothing there: no commanded attitude can guarantee the limb is in frame, whatever the keep-outs say. It is a hard ADCS requirement independent of the payload's exclusion angles.
 
-`FOV` marks cells killed by the other half of the treatment. FOUND's half field of view is 37 deg, so at 37 deg of uncertainty the shrink has consumed the entire field of view and no commanded attitude can guarantee the limb is in frame -- whatever the keep-outs say. That is a hard wall on the ADCS, independent of the payload requirement.
-
-> **Read these two tables as per-cone sensitivity, not as the cost of uncertainty.** Each one moves a single cone and holds the other at its nominal value. Real attitude uncertainty is a property of the vehicle, so it inflates *every* keep-out at once, and the cones are superadditive -- the combined cost is worse than either column suggests. The third table below is the honest one for a pointing budget.
-
-**Table A -- FOUND Sun keep-out (+x)**, with the +z cone held at nominal.
-
-| quoted \ uncertainty | 0 deg | 1.1 deg | 5 deg | 10 deg | 20 deg | 30 deg | 40 deg |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| **50 deg** | 50 / 53.5 % | 51.1 / 53.5 % | 55 / 53.5 % | 60 / 51.5 % | 70 / 49.4 % | 80 / 49.1 % | **FOV** |
-| **60 deg** | 60 / 51.5 % | 61.1 / 51.5 % | 65 / 51.5 % | 70 / 49.4 % | 80 / 49.1 % | 90 / 47.1 % | **FOV** |
-| **70 deg** | 70 / 49.4 % | 71.1 / 49.3 % | 75 / 49.3 % | 80 / 49.1 % | 90 / 47.1 % | *100 / 44.8 %* | **FOV** |
-| **80 deg** | 80 / 49.1 % | 81.1 / 48.1 % | 85 / 47.1 % | 90 / 47.1 % | *100 / 44.8 %* | *110 / 42.6 %* | **FOV** |
-| **90 deg** | 90 / 47.1 % | *91.1 / 46.9 %* | *95 / 44.8 %* | *100 / 44.8 %* | *110 / 42.6 %* | *120 / 37.3 %* | **FOV** |
-
-**Table B -- LOST / star tracker keep-out (+z)**, Sun and Earth together, with FOUND held at nominal.
-
-| quoted \ uncertainty | 0 deg | 1.1 deg | 5 deg | 10 deg | 20 deg | 30 deg | 40 deg |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| **20 deg** | 20 / 49.4 % | 21.1 / 49.4 % | 25 / 49.4 % | 30 / 49.4 % | 40 / 49.4 % | 50 / 49.4 % | **FOV** |
-| **30 deg** | 30 / 49.4 % | 31.1 / 49.4 % | 35 / 49.4 % | 40 / 49.4 % | 50 / 49.4 % | 60 / 45.4 % | **FOV** |
-| **40 deg** | 40 / 49.4 % | 41.1 / 49.4 % | 45 / 49.4 % | 50 / 49.4 % | 60 / 45.4 % | 70 / 32.8 % | **FOV** |
-| **50 deg** | 50 / 49.4 % | 51.1 / 49.4 % | 55 / 49.4 % | 60 / 45.4 % | 70 / 32.8 % | 80 / 21.0 % | **FOV** |
-| **60 deg** | 60 / 45.4 % | 61.1 / 43.5 % | 65 / 38.2 % | 70 / 32.8 % | 80 / 21.0 % | 90 / 0.0 % | **FOV** |
-
-**Table C -- both cones inflated together.** This is what a real pointing budget does, and it is the row to quote. Every keep-out carries the uncertainty simultaneously.
-
-| Uncertainty | Effective FOUND | Effective +z | Feasible | vs Table A alone |
-| --- | --- | --- | --- | --- |
-| 0 deg | 70 deg | 40 deg | 49.4 % | +0.0 pp |
-| 0.5 deg | 70.5 deg | 40.5 deg | 49.3 % | -- |
-| 1.1 deg | 71.1 deg | 41.1 deg | 49.3 % | +0.0 pp |
-| 2 deg | 72 deg | 42 deg | 49.3 % | -- |
-| 3 deg | 73 deg | 43 deg | 49.3 % | -- |
-| 5 deg | 75 deg | 45 deg | 49.3 % | +0.0 pp |
-| 10 deg | 80 deg | 50 deg | 49.1 % | +0.0 pp |
-| 11.1 deg | 81.1 deg | 51.1 deg | 48.1 % | +0.0 pp |
-| 15 deg | 85 deg | 55 deg | 47.0 % | -0.0 pp |
-| 20 deg | 90 deg | 60 deg | 43.1 % | -4.0 pp |
-| 21.1 deg | 91.1 deg *(> 90)* | 61.1 deg | 41.0 % | -5.9 pp |
-
-The last column is the size of the mistake you would make by reading Table A on its own. It is negative everywhere the uncertainty is large, which is the superadditivity: the two keep-outs exclude different arcs of the roll circle, so inflating both removes attitudes that inflating either one alone would have left available.
-
-**What changes past 90 degrees.** Below 90 deg a keep-out removes a cap from the sky and leaves most of it. At exactly 90 deg it removes a hemisphere. Past 90 deg the *allowed* region is what is left of the opposite hemisphere: a cap of half-angle `180 - effective` about the anti-Sun direction, which shrinks to a point at 180 deg. So the constraint stops being "avoid the Sun" and becomes "point almost directly away from it", which is a different pointing problem and one the limb requirement usually cannot also satisfy.
-
-| Effective half-angle | Allowed cap about anti-Sun | FOUND feasible |
-| --- | --- | --- |
-| 80 deg | 100 deg | 49.1 % |
-| 81.1 deg | 98.9 deg | 48.1 % |
-| 85 deg | 95 deg | 47.1 % |
-| 90 deg | 90 deg | 47.1 % |
-| 91.1 deg *(> hemisphere)* | 88.9 deg | 46.9 % |
-| 95 deg *(> hemisphere)* | 85 deg | 44.8 % |
-| 100 deg *(> hemisphere)* | 80 deg | 44.8 % |
-| 110 deg *(> hemisphere)* | 70 deg | 42.6 % |
-| 120 deg *(> hemisphere)* | 60 deg | 37.3 % |
-| 130 deg *(> hemisphere)* | 50 deg | 28.7 % |
-
-**Check that the two terms really add.** The tables are built from sweeps over the *sum*, which is only valid if carrying u degrees as a buffer behaves identically to folding u into every quoted angle. The two travel through different code -- one is read from the config, the other is a float added inside the solver -- so it is measured rather than asserted:
-
-| Uncertainty | As a buffer | Folded into every cone | Difference |
-| --- | --- | --- | --- |
-| 0 deg | 49.4 % | 49.4 % | +0.00 pp |
-| 1.1 deg | 49.3 % | 49.3 % | +0.00 pp |
-| 5 deg | 49.3 % | 49.3 % | +0.00 pp |
-| 10 deg | 49.1 % | 49.1 % | +0.00 pp |
-| 20 deg | 43.1 % | 43.1 % | +0.00 pp |
-| 40 deg | 0.0 % | 14.2 % | -14.20 pp  (FOV wall, expected) |
-
-Worst disagreement 0.00 percentage points below the FOV wall, so the decomposition holds: a degree of ADCS performance and a degree of optical keep-out are the same degree. Above the wall the two paths are *supposed* to diverge, because widening a keep-out does not shrink the field of view and carrying the same number as attitude uncertainty does.
+Two things to read off the figures. First, where the effective half-angle passes 90 deg the keep-out cone is **larger than a hemisphere**: the allowed region for that boresight is no longer the sky minus a cap but a cap of half-angle `180 - effective` about the anti-Sun direction, shrinking to a point at 180 deg. At 20 deg of uncertainty the 70 deg quoted FOUND exclusion is already at an effective 90 deg, and the 90 deg column is at 110 deg. Second, the grids do not simply shift: the flat region where the +z cone costs nothing shrinks from the bottom as uncertainty grows, because the uncertainty is spending that same slack.
 
 **What the cones cannot fix.** `No sunlit limb` is the largest rejection over most of the grid and it barely moves (a span of 0.0 percentage points across all 35 cells): it is eclipse and orbital geometry, not stray light. That is the floor the trade runs into, and it is why even the loosest corner of the grid leaves roughly half the timeline unusable for science.
 
@@ -324,12 +260,12 @@ Flown attitude from the CONOPS scheduler, geometry `A_2panel_90`.
 
 | Face | Area (m^2) | Sunlit | Mean solar (W/m^2) | Albedo | Earth IR | Total | Peak solar | Longest dark (min) |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| +x | 0.030 | 0 % | 1 | 88 | 86 | 175 | 569 | 1298.0 |
-| -x | 0.030 | 61 % | 776 | 6 | 79 | 861 | 1361 | 38.7 |
-| +y | 0.030 | 23 % | 68 | 40 | 82 | 191 | 1361 | 64.4 |
-| -y | 0.030 | 38 % | 24 | 43 | 83 | 151 | 1355 | 85.4 |
-| +z | 0.010 | 22 % | 55 | 27 | 63 | 145 | 1092 | 47.6 |
-| -z | 0.010 | 39 % | 22 | 50 | 77 | 149 | 1064 | 84.6 |
+| +x | 0.030 | 0 % | 1 | 86 | 83 | 169 | 540 | 1623.3 |
+| -x | 0.030 | 61 % | 766 | 7 | 82 | 855 | 1361 | 37.2 |
+| +y | 0.030 | 24 % | 70 | 41 | 80 | 191 | 1361 | 87.9 |
+| -y | 0.030 | 38 % | 32 | 43 | 84 | 159 | 1361 | 85.2 |
+| +z | 0.010 | 23 % | 67 | 27 | 62 | 156 | 1115 | 47.6 |
+| -z | 0.010 | 38 % | 27 | 52 | 79 | 158 | 1134 | 84.7 |
 
 Eclipse: 38.9 % of the orbit, longest 36.1 min.
 
@@ -347,20 +283,20 @@ C dT/dt = Q_solar + Q_albedo + Q_earthIR + Q_internal - P_electrical - eps*sigma
 | --- | --- | --- | --- |
 | COMM (radio TX) | RF wave | 0.80 W | **93.0 %** |
 | COMM (radio RX) | nothing | 0 W | 100.0 % |
-| ADCS (magnetorquers) | mechanical work | 15.163 nW | **100.0000 %** |
+| ADCS (magnetorquers) | mechanical work | 20.607 nW | **100.0000 %** |
 | Everything else | nothing | 0 W | 100.0 % |
 
 The transmitter is the only meaningful exception. Of its 11.44 W input, the link budget's own numbers (2 W at the PA, -3 dB return loss, -1 dB circuit loss) leave only 0.80 W actually radiating away -- so the radio is, thermally, almost a pure heater.
 
-Magnetorquers are resistive coils. The mechanical power they deliver is torque x body rate, which at this vehicle's 8.9 uN m and 0.0974 deg/s is about 15.163 nW -- roughly one part in a billion of their electrical draw. Unlike reaction wheels they store no useful kinetic energy, and the coil's field energy returns to the bus on de-energisation. Treating ADCS as 100 % dissipative is correct to nine decimal places.
+Magnetorquers are resistive coils. The mechanical power they deliver is torque x body rate, which at this vehicle's 12.1 uN m and 0.0974 deg/s is about 20.607 nW -- roughly one part in a billion of their electrical draw. Unlike reaction wheels they store no useful kinetic energy, and the coil's field energy returns to the bus on de-energisation. Treating ADCS as 100 % dissipative is correct to nine decimal places.
 
 | Geometry | Mean | Min | Max | Swing | Time constant | Battery margin (cold/hot) |
 | --- | --- | --- | --- | --- | --- | --- |
-| A_2panel_90 | 9.1 C | -3.6 C | 20.5 C | 24.1 C | 79 min | +6.4 / +24.5 C |
-| B_3panel_90 | 8.9 C | -7.9 C | 25.8 C | 33.7 C | 64 min | +2.1 / +19.2 C |
-| C_2panel_135_plus_body | 15.8 C | 1.0 C | 29.3 C | 28.3 C | 73 min | +11.0 / +15.7 C |
+| A_2panel_90 | 8.7 C | -3.6 C | 20.4 C | 24.0 C | 79 min | +6.4 / +24.6 C |
+| B_3panel_90 | 9.0 C | -6.9 C | 26.1 C | 33.0 C | 64 min | +3.1 / +18.9 C |
+| C_2panel_135_plus_body | 16.0 C | 0.5 C | 30.7 C | 30.2 C | 73 min | +10.5 / +14.3 C |
 
-Radiating area 0.260 m^2 at an effective emissivity of 0.81; thermal capacitance 5100 J/K. Mean absorbed environmental load 75.2 W against 8.2 W of internal dissipation.
+Radiating area 0.260 m^2 at an effective emissivity of 0.81; thermal capacitance 5100 J/K. Mean absorbed environmental load 74.7 W against 8.2 W of internal dissipation.
 
 The thermal time constant is comparable to the orbit period, which is why the swing is far smaller than the instantaneous radiative equilibrium would suggest: the vehicle's own mass averages the eclipse cycle. A single-node model cannot see gradients, so the deployed wing will in reality run hotter in sunlight and colder in eclipse than these numbers, and the battery -- usually the most temperature-sensitive item -- sits inside the bus where swings are smaller. Treat this as the bulk average, not a component prediction.
 
@@ -368,21 +304,25 @@ The thermal time constant is comparable to the orbit period, which is why the sw
 
 - Dipole per axis: [0.2, 0.2, 0.2] A m^2.
 - Field 26086-48048 nT (mean 35583 nT).
-- Control torque: mean 8.92 uN m, minimum 1.27 uN m.
+- Control torque: mean 12.12 uN m, minimum 7.45 uN m.
 - Pointing budget: 1.00 deg control + 0.10 deg knowledge, combined by `sum` = **1.10 deg**. Every experiment-mode keep-out is enforced with that as a buffer, so it is a direct tax on science time -- see the exclusion-angle trade.
 
-| Slew | Best (min) | Median (min) | 10th percentile field (min) |
-| --- | --- | --- | --- |
-| 10deg | 1.6 | 2.0 | 2.7 |
-| 30deg | 2.7 | 3.4 | 4.7 |
-| 60deg | 3.8 | 4.8 | 6.6 |
-| 90deg | 4.7 | 5.9 | 8.1 |
-| 180deg | 6.6 | 8.4 | 11.4 |
+Slew time is not one number for a magnetically actuated vehicle. The achievable torque `m x B` always lies in the plane perpendicular to the field, so there is **no** authority about an axis parallel to `B` -- a manoeuvre that has to turn about the field direction cannot start, and has to wait for the geometry to rotate. Each row below is the distribution over 24 eigenaxis directions and 16 start phases, integrating a bang-bang profile through the real field history rather than evaluating a constant-torque formula.
 
-Disturbance torques: gravity gradient 0.077 uN m, residual dipole 0.178 uN m, aero 0.078 uN m. Authority margin 26.9x on average, 3.22x worst case.
+| Slew | Best | Median | 90th pct | Worst | Eigenaxis along B | Constant-torque formula |
+| --- | --- | --- | --- | --- | --- | --- |
+| 10deg | 0.7 min | 1.4 min | 1.8 min | 4.2 min | 3.3 min | 1.2 min |
+| 30deg | 1.1 min | 2.3 min | 3.0 min | 5.7 min | 4.7 min | 2.0 min |
+| 60deg | 1.5 min | 3.1 min | 4.3 min | 7.0 min | 6.0 min | 2.8 min |
+| 90deg | 1.7 min | 3.8 min | 5.3 min | 10.0 min | 6.8 min | 3.5 min |
+| 180deg | 2.6 min | 5.4 min | 7.2 min | 12.0 min | 8.6 min | 4.9 min |
 
-Momentum management needs the torquers energised roughly 3.0 % of each orbit.
-Detumble from 10 deg/s: about 0.7 hours.
+The spread is the finding. A 90 deg repoint takes 3.8 min typically but 10.0 min in the worst geometry, and 6.8 min when the eigenaxis starts along the field. The constant-torque formula says 3.5 min for all of them, which is why it is only shown for comparison: it is close to the median and blind to the tail, and the tail is what breaks a schedule. Nothing is actually unreachable (0 % of sampled manoeuvres failed to complete) -- the field sweeps through a large angle every orbit, so a slew that cannot start now can start a few minutes later.
+
+Disturbance torques: gravity gradient 0.077 uN m, residual dipole 0.178 uN m, aero 0.078 uN m. Authority margin 36.5x on average, 18.90x worst case.
+
+Momentum management needs the torquers energised roughly 2.2 % of each orbit.
+Detumble from 10 deg/s: about 0.5 hours.
 
 ## Payload throughput
 
@@ -396,41 +336,43 @@ Time in experiment mode is a multiplier on cadence rather than a ceiling of its 
 
 | Geometry | Time in experiment mode | USB 2.0 | Storage | Downlink | Binding constraint | Max images/day | Cadence needed |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| A_2panel_90 | 1.7 % (0.4 h/day) | 39,275 | 195,312 | 12,433,838 | USB 2.0 bus over the available experiment time | **39,275** | 13.73 Hz |
-| B_3panel_90 | 6.8 % (1.6 h/day) | 161,908 | 195,312 | 12,433,838 | USB 2.0 bus over the available experiment time | **161,908** | 13.73 Hz |
-| C_2panel_135_plus_body | 15.4 % (3.7 h/day) | 366,616 | 195,312 | 12,433,838 | on-board storage | **195,312** | 7.32 Hz |
+| A_2panel_90 | 2.5 % (0.6 h/day) | 60,424 | 195,312 | 12,433,838 | USB 2.0 bus over the available experiment time | **60,424** | 13.73 Hz |
+| B_3panel_90 | 9.3 % (2.2 h/day) | 220,638 | 195,312 | 12,433,838 | on-board storage | **195,312** | 12.16 Hz |
+| C_2panel_135_plus_body | 16.0 % (3.8 h/day) | 379,158 | 195,312 | 12,433,838 | on-board storage | **195,312** | 7.07 Hz |
 
-Two things follow. First, downlink capacity is **not** the constraint on science volume, and it is not close: only two debug images come down per day, so what is actually transmitted is numerical data plus housekeeping, orders of magnitude below what the Leaf Space contacts can carry. Sizing the radio against image volume would be sizing against the wrong thing. Second, energy and attitude feasibility decide how hard the cameras have to be driven to reach whichever ceiling binds: A_2panel_90 needs 13.7 Hz, B_3panel_90 needs 13.7 Hz, C_2panel_135_plus_body needs 7.3 Hz. A geometry with less time in experiment mode has to run its cameras faster to collect the same science.
+Two things follow. First, downlink capacity is **not** the constraint on science volume, and it is not close: only two debug images come down per day, so what is actually transmitted is numerical data plus housekeeping, orders of magnitude below what the Leaf Space contacts can carry. Sizing the radio against image volume would be sizing against the wrong thing. Second, energy and attitude feasibility decide how hard the cameras have to be driven to reach whichever ceiling binds: A_2panel_90 needs 13.7 Hz, B_3panel_90 needs 12.2 Hz, C_2panel_135_plus_body needs 7.1 Hz. A geometry with less time in experiment mode has to run its cameras faster to collect the same science.
 
 ### Achieved cadence from the CONOPS scheduler
 
 | Geometry | Requested (Hz) | Experiments/day | Images/day | Min SOC | Downlink (MB/day) | Backlog growth (MB/day) |
 | --- | --- | --- | --- | --- | --- | --- |
-| A_2panel_90 | 0.02 | 39 | 77 | 70 % | 0.9 | +0.41 |
-| A_2panel_90 | 0.05 | 85 | 170 | 70 % | 0.9 | +0.42 |
-| A_2panel_90 | 0.10 | 158 | 316 | 70 % | 0.9 | +0.43 |
-| A_2panel_90 | 0.20 | 286 | 572 | 70 % | 1.0 | +0.40 |
-| A_2panel_90 | 0.50 | 937 | 1,875 | 70 % | 1.0 | +0.45 |
-| A_2panel_90 | 1.00 | 1,627 | 3,253 | 70 % | 1.1 | +0.46 |
-| B_3panel_90 | 0.02 | 123 | 245 | 70 % | 0.9 | +0.48 |
-| B_3panel_90 | 0.05 | 301 | 601 | 70 % | 0.8 | +0.56 |
-| B_3panel_90 | 0.10 | 626 | 1,252 | 70 % | 0.9 | +0.51 |
-| B_3panel_90 | 0.20 | 1,179 | 2,358 | 70 % | 0.9 | +0.60 |
-| B_3panel_90 | 0.50 | 2,967 | 5,935 | 70 % | 1.1 | +0.69 |
-| B_3panel_90 | 1.00 | 5,767 | 11,533 | 70 % | 1.5 | +0.84 |
-| C_2panel_135_plus_body | 0.02 | 279 | 558 | 89 % | 1.1 | +0.29 |
-| C_2panel_135_plus_body | 0.05 | 690 | 1,379 | 89 % | 1.1 | +0.36 |
-| C_2panel_135_plus_body | 0.10 | 1,357 | 2,714 | 89 % | 1.2 | +0.36 |
-| C_2panel_135_plus_body | 0.20 | 2,670 | 5,339 | 89 % | 1.3 | +0.48 |
-| C_2panel_135_plus_body | 0.50 | 6,656 | 13,311 | 89 % | 1.8 | +0.61 |
-| C_2panel_135_plus_body | 1.00 | 13,250 | 26,499 | 89 % | 2.7 | +0.87 |
+| A_2panel_90 | 0.02 | 42 | 84 | 70 % | 1.0 | +0.36 |
+| A_2panel_90 | 0.05 | 122 | 244 | 70 % | 1.0 | +0.32 |
+| A_2panel_90 | 0.10 | 267 | 534 | 70 % | 1.0 | +0.34 |
+| A_2panel_90 | 0.20 | 440 | 880 | 70 % | 1.0 | +0.37 |
+| A_2panel_90 | 0.50 | 1,270 | 2,540 | 70 % | 1.1 | +0.41 |
+| A_2panel_90 | 1.00 | 2,555 | 5,110 | 70 % | 1.4 | +0.41 |
+| B_3panel_90 | 0.02 | 172 | 344 | 70 % | 1.0 | +0.38 |
+| B_3panel_90 | 0.05 | 428 | 855 | 70 % | 1.0 | +0.37 |
+| B_3panel_90 | 0.10 | 812 | 1,624 | 70 % | 1.2 | +0.32 |
+| B_3panel_90 | 0.20 | 1,607 | 3,213 | 70 % | 1.1 | +0.51 |
+| B_3panel_90 | 0.50 | 4,061 | 8,122 | 70 % | 1.4 | +0.60 |
+| B_3panel_90 | 1.00 | 8,002 | 16,003 | 70 % | 2.0 | +0.68 |
+| C_2panel_135_plus_body | 0.02 | 264 | 528 | 88 % | 1.1 | +0.29 |
+| C_2panel_135_plus_body | 0.05 | 652 | 1,304 | 88 % | 1.1 | +0.35 |
+| C_2panel_135_plus_body | 0.10 | 1,340 | 2,679 | 88 % | 1.2 | +0.36 |
+| C_2panel_135_plus_body | 0.20 | 2,761 | 5,522 | 88 % | 1.4 | +0.39 |
+| C_2panel_135_plus_body | 0.50 | 6,623 | 13,246 | 88 % | 1.9 | +0.56 |
+| C_2panel_135_plus_body | 1.00 | 12,411 | 24,823 | 87 % | 2.6 | +0.84 |
 
 ## CONOPS mode split (baseline 0.2 Hz)
 
-| Geometry | Standby | Experiment | Downlink | Slew | Slews/day | Energy margin (W) | Peak tracking rate |
+| Geometry | Standby | Experiment | Downlink | Slew | Slews/day | Energy margin (W) | Slew median / p90 / max |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| A_2panel_90 | 75.3 % | 1.7 % | 0.02 % | 23.0 % | 29 | -0.41 | 0.721 deg/s |
-| B_3panel_90 | 36.3 % | 6.8 % | 0.02 % | 56.9 % | 50 | -0.13 | 0.721 deg/s |
-| C_2panel_135_plus_body | 36.8 % | 15.4 % | 0.03 % | 47.7 % | 75 | 0.93 | 0.942 deg/s |
+| A_2panel_90 | 75.8 % | 2.5 % | 0.02 % | 21.6 % | 26 | -0.48 | 2.2 / 5.6 / 7.4 min |
+| B_3panel_90 | 37.4 % | 9.3 % | 0.02 % | 53.3 % | 54 | -0.10 | 1.4 / 6.4 / 7.4 min |
+| C_2panel_135_plus_body | 39.2 % | 16.0 % | 0.03 % | 44.8 % | 77 | 1.12 | 1.7 / 5.2 / 6.3 min |
+
+Every slew in the scheduler is priced against the field the vehicle actually has: its eigenaxis, the inertia about that axis, and the authority `sum_i m_i |(B x e)_i|` available about it over the following orbits. That is why the maximum is several times the median -- a repoint that has to turn about the field direction waits for the geometry before it can even start.
 
 Peak tracking rate is how fast the target attitude moves while following a limb or a ground station. Compare it against the rate the magnetorquers can sustain: at the mean control torque above, spinning up to 0.1 deg/s about the stiff axis takes on the order of a minute, so tracking is not the binding constraint -- the discrete slews between modes are.

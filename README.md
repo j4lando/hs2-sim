@@ -58,6 +58,38 @@ whether *any* legal attitude exists at each instant. Where several are legal it
 picks the one that generates the most solar power. `tests/test_physics.py`
 independently re-checks the solver's own answers against every keep-out cone.
 
+## Magnetorquer authority and slew time
+
+Two things about magnetic actuation drive everything else, and both are easy to
+get wrong.
+
+**Torque about the field direction does not exist.** The achievable torque
+`m x B` always lies in the plane perpendicular to `B`. The most torque
+obtainable about a unit axis `e`, given per-coil limits `|m_i| <= m_i^max`, is
+
+```
+tau_e^max = max_m  e . (m x B) = max_m  m . (B x e) = sum_i m_i^max |(B x e)_i|
+```
+
+which is zero exactly when `e` is parallel to `B`. Note this is the achievable
+*projection* onto `e`; a pure torque about `e` with no cross-axis component
+exists only when `e` is perpendicular to `B`. Magnetorquer-only slews accept
+the cross-axis term and let it wash out as the field rotates, which is what the
+model assumes.
+
+**Slew time is therefore not `2 sqrt(theta J / tau)`.** That closed form needs
+a constant authority, and the authority about any given eigenaxis sweeps from
+zero to full twice per orbit. `slew_time_eigenaxis` integrates a bang-bang
+profile forward through the real field history instead, so a manoeuvre whose
+eigenaxis starts along the field is charged the wait rather than being given a
+torque it does not have. Nothing comes out impossible — the field moves through
+a large angle every orbit — but the tail is long: a 90 deg repoint that takes
+~3 min in good geometry takes over twice that in the worst, and the closed form
+reports the same number for both.
+
+Every slew in the CONOPS scheduler is priced this way, against the eigenaxis it
+actually has to turn about and the inertia about that axis.
+
 ## The camera exclusion-angle trade
 
 `hs2sim/exclusion.py` re-solves the whole pointing problem and re-runs the mode

@@ -32,7 +32,8 @@ import math
 import numpy as np
 
 from . import comms, environment, power
-from .adcs import TorqueAuthority, inertia_matrix, slew_time_s
+from .adcs import (TorqueAuthority, available_torque_about, dipole_vector,
+                   eigenaxis_inertia, inertia_matrix, slew_time_eigenaxis)
 from .config import MissionConfig
 from .environment import EnvironmentResult
 from .geometry import PointingResult
@@ -42,6 +43,11 @@ MODE_STANDBY = 1
 MODE_SLEW = 2
 MODE_EXPERIMENT = 3
 MODE_DOWNLINK = 4
+
+# Longest a single manoeuvre is allowed to take before the scheduler stops
+# waiting for the field to cooperate. Far beyond any real slew; it exists only
+# so a pathological geometry cannot stall the run.
+SLEW_GIVE_UP_S = 6.0 * 3600.0
 
 MODE_NAMES = {
     MODE_SAFE: "safe",
@@ -65,6 +71,8 @@ class ConopsResult:
     tracking_rate: np.ndarray       # (N,) rad/s the target attitude moves
     slew_count: int
     slew_seconds: float
+    planned_slew_seconds: np.ndarray   # (S,) magnetically-priced slew durations
+    slew_unreachable: int              # manoeuvres the field never permitted
     battery_limited: bool
 
     def mode_fractions(self) -> dict[str, float]:
@@ -78,6 +86,31 @@ def principal_angle(dcm_a: np.ndarray, dcm_b: np.ndarray) -> float:
     rel = dcm_b @ dcm_a.T
     cos_theta = (np.trace(rel) - 1.0) / 2.0
     return float(np.arccos(np.clip(cos_theta, -1.0, 1.0)))
+
+
+def rotation_axis_angle(dcm_a: np.ndarray,
+                        dcm_b: np.ndarray) -> tuple[np.ndarray, float]:
+    """Eigenaxis and angle of the rotation taking ``dcm_a`` to ``dcm_b``.
+
+    The axis is invariant under the rotation, so the same components describe
+    it in either frame -- which is what lets the caller express the magnetic
+    field in the starting body frame and still get the right answer.
+    """
+    rel = dcm_b @ dcm_a.T
+    cos_theta = np.clip((np.trace(rel) - 1.0) / 2.0, -1.0, 1.0)
+    theta = math.acos(cos_theta)
+    axis = np.array([rel[2, 1] - rel[1, 2],
+                     rel[0, 2] - rel[2, 0],
+                     rel[1, 0] - rel[0, 1]])
+    norm = np.linalg.norm(axis)
+    if norm < 1e-12:
+        if theta < 1e-9:
+            return np.array([0.0, 0.0, 1.0]), 0.0
+        # 180 deg: the skew part vanishes, so take the axis from the symmetric
+        # part instead.
+        eigenvalues, eigenvectors = np.linalg.eigh((rel + np.eye(3)) / 2.0)
+        return eigenvectors[:, int(np.argmax(eigenvalues))], theta
+    return axis / norm, theta
 
 
 def slerp_dcm(dcm_a: np.ndarray, dcm_b: np.ndarray, fraction: float) -> np.ndarray:
@@ -203,9 +236,12 @@ def simulate(cfg: MissionConfig,
 
     inertia = inertia_matrix(cfg)
     slew_margin = float(cfg.spacecraft.adcs.settle_margin)
-    # Use the median authority: half the time the field geometry is better.
-    typical_torque = float(np.median(authority.max_torque_nm))
-    j_typical = float(np.max(np.diag(inertia)))
+    dipole = dipole_vector(cfg)
+    # Slews are priced against the actual field history about the actual
+    # eigenaxis, so a manoeuvre that has to turn about the field direction is
+    # charged the wait. Look ahead three orbits, which is far more than any
+    # slew needs and enough for the field geometry to come round.
+    slew_horizon = min(n, max(64, int(3.0 * 5580.0 / dt)))
 
     mode = np.full(n, MODE_STANDBY, dtype=np.int8)
     flown = standby_dcm.copy()
@@ -236,6 +272,8 @@ def simulate(cfg: MissionConfig,
     slew_rate = 0.0
     slew_count = 0
     slew_seconds = 0.0
+    slew_seconds_planned: list[float] = []
+    slew_unreachable = 0
     battery_limited = False
     charging_hold = False
 
@@ -245,6 +283,7 @@ def simulate(cfg: MissionConfig,
     # Hoisted out of the loop: recomputing these per sample would make the
     # scheduler quadratic in the number of samples.
     sun_hat = env.sun_unit()
+    b_field_N = env.b_field_N
     array_settings = cfg.spacecraft.solar_array
     array_efficiency = (float(array_settings.mppt_efficiency)
                         * float(array_settings.degradation))
@@ -299,11 +338,28 @@ def simulate(cfg: MissionConfig,
                 slewing = True
                 slew_count += 1
                 pending_mode = target_mode
-                # Average rate the magnetorquers can sustain for a slew of this
-                # size. Slew time goes as sqrt(angle), so bigger repoints get a
-                # higher average rate, which is the bang-bang result.
-                slew_rate = angle_to_target / slew_time_s(
-                    angle_to_target, j_typical, typical_torque, slew_margin)
+                # Price this specific manoeuvre: the eigenaxis it has to turn
+                # about, the inertia about that axis, and the authority the
+                # field actually offers about it over the coming orbits. The
+                # field is taken in the body frame held at the start of the
+                # slew; the vehicle also rotates during the manoeuvre, which
+                # this does not track, but that is second order next to the
+                # twice-per-orbit sweep of the field itself.
+                axis_B, _ = rotation_axis_angle(current_dcm, target_dcm)
+                b_body = (b_field_N[i:i + slew_horizon] @ current_dcm.T)
+                torque_series = available_torque_about(dipole, b_body, axis_B)
+                seconds = slew_time_eigenaxis(
+                    torque_series, eigenaxis_inertia(inertia, axis_B),
+                    angle_to_target, dt, 0, slew_margin)
+                if not math.isfinite(seconds) or seconds <= 0:
+                    # The integrator gave up: no field geometry inside its
+                    # horizon lets this manoeuvre finish. Do not deadlock the
+                    # scheduler on it -- charge the horizon and move on, and
+                    # count it so it cannot hide.
+                    seconds = SLEW_GIVE_UP_S
+                    slew_unreachable += 1
+                slew_rate = angle_to_target / seconds
+                slew_seconds_planned.append(seconds)
             elif mode_changed:
                 current_mode = target_mode
 
@@ -376,6 +432,8 @@ def simulate(cfg: MissionConfig,
         tracking_rate=tracking_rate,
         slew_count=slew_count,
         slew_seconds=slew_seconds,
+        planned_slew_seconds=np.array(slew_seconds_planned),
+        slew_unreachable=slew_unreachable,
         battery_limited=battery_limited,
     )
 
@@ -404,6 +462,16 @@ def summarise(cfg: MissionConfig, env: EnvironmentResult,
         "energy_margin_w": float(np.mean(result.generation_w - result.load_w)),
         "slews_per_day": result.slew_count / days,
         "slew_time_fraction": result.slew_seconds / (days * 86400.0),
+        "planned_slew_median_min": (
+            float(np.median(result.planned_slew_seconds)) / 60.0
+            if result.planned_slew_seconds.size else 0.0),
+        "planned_slew_p90_min": (
+            float(np.percentile(result.planned_slew_seconds, 90)) / 60.0
+            if result.planned_slew_seconds.size else 0.0),
+        "planned_slew_max_min": (
+            float(np.max(result.planned_slew_seconds)) / 60.0
+            if result.planned_slew_seconds.size else 0.0),
+        "slews_unreachable": result.slew_unreachable,
         "max_tracking_rate_dps": float(np.degrees(np.max(result.tracking_rate))),
         "mean_tracking_rate_dps": float(np.degrees(np.mean(result.tracking_rate))),
         **{f"frac_{name}": value for name, value in result.mode_fractions().items()},
