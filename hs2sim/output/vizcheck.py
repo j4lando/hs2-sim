@@ -16,7 +16,7 @@ way out because Unity expects degrees, even though the Python API takes
 radians. Anything reading this file back has to know that.
 
 Usage:
-    python -m hs2sim.vizcheck results/_VizFiles/<name>_UnityViz.bin
+    python -m hs2sim.output.vizcheck results/_VizFiles/<name>_UnityViz.bin
 """
 
 from __future__ import annotations
@@ -81,7 +81,7 @@ def decode(path: pathlib.Path) -> list:
 def _expected_angles():
     """Sensor angles straight from config, for cross-checking the recording."""
     try:
-        from .config import MissionConfig
+        from ..config import MissionConfig
     except ImportError:
         return None
     sensors = MissionConfig().spacecraft.sensors

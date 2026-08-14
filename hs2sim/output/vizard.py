@@ -40,9 +40,9 @@ import pathlib
 
 import numpy as np
 
-from . import environment
-from .config import MissionConfig
-from .environment import R_EARTH, EnvironmentResult
+from .. import environment
+from ..config import MissionConfig
+from ..environment import R_EARTH, EnvironmentResult
 
 # Vizard colours as RGBA-255.
 COLOR_KEEPOUT = [255, 60, 60, 110]

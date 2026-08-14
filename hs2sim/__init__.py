@@ -16,6 +16,7 @@ __all__ = [
     "conops",
     "environment",
     "geometry",
+    "output",
     "power",
     "thermal",
 ]

@@ -72,7 +72,7 @@ If you cannot install Vizard (or just want a fast check that an export is
 sound), the recording can be decoded and validated directly:
 
 ```bash
-python -m hs2sim.vizcheck results/_VizFiles/hs2_conops_<geometry>_UnityViz.bin
+python -m hs2sim.output.vizcheck results/_VizFiles/hs2_conops_<geometry>_UnityViz.bin
 ```
 
 It decodes the protobuf stream and checks the scene against physics — Earth at
@@ -201,7 +201,7 @@ Two different conventions are in play, which is easy to get backwards:
 
 So the 40° and 70° Sun exclusions go in unchanged, FOUND's 74° full-cone FOV
 goes in as a 37° cone half-angle, and the camera FOVs go in as the full 25.2°
-and 74°. `hs2sim.vizcheck` asserts the recording matches
+and 74°. `hs2sim.output.vizcheck` asserts the recording matches
 `config/spacecraft.yaml` on every one of these.
 
 ## 6. Live streaming instead of a file
