@@ -8,7 +8,6 @@ Usage:
 
 Outputs:
     results/summary.json      every number this script computed
-    results/report.md         a readable narrative of the findings
     results/*.png             plots (only if matplotlib is available)
 """
 
@@ -513,13 +512,6 @@ def main() -> int:
     with open(out_path, "w", encoding="utf-8") as handle:
         json.dump(to_jsonable(results), handle, indent=2)
     log(f"Wrote {out_path}")
-
-    try:
-        from hs2sim import report
-        report.write_report(cfg, results, RESULTS_DIR / "report.md")
-        log(f"Wrote {RESULTS_DIR / 'report.md'}")
-    except Exception as exc:  # pragma: no cover
-        log(f"Report generation skipped: {exc}")
 
     try:
         from hs2sim import plots
