@@ -174,6 +174,54 @@ def test_bitrate_selection_is_monotonic_in_range():
     assert near >= far > 0
 
 
+# ---------------------------------------------------------------------------
+# Fixed-rate GFSK mode
+# ---------------------------------------------------------------------------
+
+def test_fixed_rate_mode_is_off_by_default():
+    cfg = MissionConfig()
+    assert not comms.fixed_rate_enabled(cfg)
+    assert comms.eb_n0_required_db(cfg) == pytest.approx(
+        float(cfg.radio.eb_n0_required_db))
+    assert comms.candidate_bitrates_kbps(cfg) == [
+        float(r) for r in cfg.radio.available_bitrates_kbps]
+
+
+def test_fixed_rate_mode_uses_only_the_configured_gfsk_rate():
+    cfg = MissionConfig().copy_with(**{"radio.fixed_rate.enabled": True})
+    assert comms.fixed_rate_enabled(cfg)
+    assert comms.candidate_bitrates_kbps(cfg) == [
+        float(cfg.radio.fixed_rate.bitrate_kbps)]
+    assert comms.eb_n0_required_db(cfg) == pytest.approx(
+        float(cfg.radio.fixed_rate.eb_n0_required_db))
+
+    fixed_rate_bps = float(cfg.radio.fixed_rate.bitrate_kbps) * 1e3 / float(
+        cfg.radio.fec_overhead)
+    close_range = np.array([500e3])
+    rate = comms.achievable_bitrate_bps(cfg, close_range)[0]
+    # Either the single fixed rate closes, or the link delivers nothing --
+    # there is no adaptive fallback to a slower rate.
+    assert rate == pytest.approx(fixed_rate_bps) or rate == 0.0
+
+
+def test_fixed_rate_mode_never_exceeds_its_pinned_rate_even_when_closer():
+    """A shorter range must not unlock a faster rate: there is only one."""
+    cfg = MissionConfig().copy_with(**{"radio.fixed_rate.enabled": True})
+    fixed_rate_bps = float(cfg.radio.fixed_rate.bitrate_kbps) * 1e3 / float(
+        cfg.radio.fec_overhead)
+    near = comms.achievable_bitrate_bps(cfg, np.array([500e3]))[0]
+    far = comms.achievable_bitrate_bps(cfg, np.array([2200e3]))[0]
+    assert near in (0.0, pytest.approx(fixed_rate_bps))
+    assert far in (0.0, pytest.approx(fixed_rate_bps))
+
+
+def test_fixed_rate_gfsk_requires_more_margin_than_adaptive_bpsk():
+    """GFSK's non-coherent demod costs Eb/N0 relative to the BPSK default."""
+    cfg = MissionConfig()
+    gfsk = cfg.copy_with(**{"radio.fixed_rate.enabled": True})
+    assert comms.eb_n0_required_db(gfsk) > comms.eb_n0_required_db(cfg)
+
+
 def test_data_budget_scales_with_experiment_count():
     cfg = MissionConfig()
     contact = 60 * 60.0

@@ -80,7 +80,21 @@ radio:
   # the transmitted bits.
   fec_overhead: 2.0             # [budget] "Convolutional FEC as extra %" = 100 %
   # Symbol rates the radio can actually be commanded to. The link solver picks
-  # the highest rate that closes with margin at each elevation.
+  # the highest rate that closes with margin at each elevation. This is the
+  # default, adaptive mode -- see `fixed_rate` below for the alternative.
   available_bitrates_kbps: [9.6, 19.2, 38.4, 76.8, 153.6, 256.0, 512.0, 1000.0]
   # Time lost at the start of a pass to acquisition and lock.
   acquisition_overhead_s: 30.0  # [assumed]
+
+  # Fixed-rate mode: pins the radio to a single commanded rate using GFSK
+  # instead of adaptively picking a BPSK rate per pass. GFSK trades spectral
+  # efficiency for simpler, non-coherent (envelope/FM) demodulation, which is
+  # cheaper on the ground and more tolerant of frequency error but costs
+  # extra Eb/N0 for the same bit-error rate because there is no coherent
+  # matched filter to exploit. When enabled, the link solver ignores
+  # `eb_n0_required_db` and `available_bitrates_kbps` above and uses only the
+  # values below.
+  fixed_rate:
+    enabled: false
+    bitrate_kbps: 9.6            # [assumed] EnduroSat radio's low-rate GFSK mode
+    eb_n0_required_db: 14.0      # [assumed] GFSK, ~3 dB worse than coherent BPSK

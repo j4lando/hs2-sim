@@ -15,6 +15,16 @@ user asked for Leaf Space rather than the university dish the budget assumed:
 
 Spacecraft-side numbers (2 W, 5 dBi patch, losses) come from the budget, which
 the user flagged as trustworthy for antenna specifications.
+
+Two link modes are modelled, selected by ``radio.fixed_rate.enabled``:
+
+  * **Adaptive** (default): the radio can be commanded to any rate in
+    ``radio.available_bitrates_kbps``, coded BPSK, and the solver picks the
+    highest one that closes with margin at each sample's actual range.
+  * **Fixed-rate GFSK**: the radio is pinned to the single rate in
+    ``radio.fixed_rate.bitrate_kbps`` and demodulated non-coherently (GFSK),
+    which costs extra Eb/N0 relative to BPSK for the same bit-error rate. The
+    link either closes at that one rate or delivers nothing.
 """
 
 from __future__ import annotations
@@ -96,10 +106,34 @@ def c_over_n0_dbhz(cfg: MissionConfig,
             - BOLTZMANN_DBW)
 
 
+def fixed_rate_enabled(cfg: MissionConfig) -> bool:
+    """Whether the radio is pinned to a single GFSK rate this run."""
+    fixed = getattr(cfg.radio, "fixed_rate", None)
+    return bool(fixed) and bool(fixed.get("enabled", False))
+
+
+def eb_n0_required_db(cfg: MissionConfig) -> float:
+    """Eb/N0 threshold for whichever modulation/coding is active this run."""
+    if fixed_rate_enabled(cfg):
+        return float(cfg.radio.fixed_rate.eb_n0_required_db)
+    return float(cfg.radio.eb_n0_required_db)
+
+
+def candidate_bitrates_kbps(cfg: MissionConfig) -> list[float]:
+    """Rates the link solver is allowed to choose from this run."""
+    if fixed_rate_enabled(cfg):
+        return [float(cfg.radio.fixed_rate.bitrate_kbps)]
+    return [float(r) for r in cfg.radio.available_bitrates_kbps]
+
+
 def achievable_bitrate_bps(cfg: MissionConfig,
                            range_m: np.ndarray,
                            worst_case_pointing: bool = False) -> np.ndarray:
     """Highest commandable channel rate that closes with the required margin.
+
+    In fixed-rate mode there is only one candidate rate -- GFSK at
+    ``radio.fixed_rate.bitrate_kbps`` -- so the link either closes there or
+    returns zero; there is no adaptive fallback to a slower rate.
 
     Returns the *information* rate: the channel rate divided by the FEC
     expansion, since rate-1/2 convolutional coding transmits two channel bits
@@ -108,10 +142,10 @@ def achievable_bitrate_bps(cfg: MissionConfig,
     """
     radio = cfg.radio
     cn0 = c_over_n0_dbhz(cfg, range_m, worst_case_pointing)
-    required = (float(radio.eb_n0_required_db)
+    required = (eb_n0_required_db(cfg)
                 + float(radio.required_margin_db)
                 + float(radio.implementation_loss_db))
-    rates_bps = np.array([r * 1e3 for r in radio.available_bitrates_kbps])
+    rates_bps = np.array([r * 1e3 for r in candidate_bitrates_kbps(cfg)])
     fec = float(radio.fec_overhead)
 
     out = np.zeros_like(cn0)
@@ -126,7 +160,7 @@ def link_margin_db(cfg: MissionConfig, range_m: float, channel_rate_bps: float,
     """Margin for a specific range and rate, for comparison with the budget."""
     cn0 = c_over_n0_dbhz(cfg, np.array([range_m]), worst_case_pointing)[0]
     eb_n0 = cn0 - 10.0 * math.log10(channel_rate_bps)
-    return float(eb_n0 - float(cfg.radio.eb_n0_required_db)
+    return float(eb_n0 - eb_n0_required_db(cfg)
                  - float(cfg.radio.implementation_loss_db))
 
 
