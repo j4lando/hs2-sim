@@ -11,9 +11,24 @@ adding up per-subsystem averages, is that the constraints are coupled:
     which is minutes, not seconds -- so mode thrash is genuinely expensive.
 
 Mode priority, highest first:
-    DOWNLINK  when a station is visible and there is data queued
-    EXPERIMENT when the pointing constraints are satisfiable and SOC allows
+    SAFE      whenever stored energy has fallen to the survival reserve
+    DOWNLINK  a contact is up or about to be, data is queued, and the battery
+              can fund the whole contact and the recovery from it
+    EXPERIMENT the pointing constraints are satisfiable and the battery can
+              fund a whole science block and the recovery from it
     STANDBY   otherwise (sun-pointing, charging)
+
+Every one of those energy tests is a threshold derived in `energy` from what
+the activity actually costs, worst case, in the dark -- not a number chosen in
+advance. An activity is never entered part-funded, so none has to be abandoned
+halfway for want of charge.
+
+The battery is integrated honestly: it is *not* held up at the
+depth-of-discharge limit. Clamping there would go on charging each mode's full
+load while inventing the energy to pay for it, and the model would report a
+vehicle sitting at its floor doing work it could not power. SOC is allowed
+through the floor, dropping through the survival reserve is what commands SAFE,
+and a battery that reaches zero fails the mission and says so.
 SLEW is inserted whenever the attitude has to change by more than
 ``intra_mode_slew_threshold_deg``. That covers mode changes, but also genuine
 repoints *inside* experiment mode: when the sunlit-limb and Sun keep-out
@@ -31,7 +46,7 @@ import math
 
 import numpy as np
 
-from . import comms, environment, power
+from . import comms, energy, environment, power
 from .adcs import (TorqueAuthority, available_torque_about, dipole_vector,
                    eigenaxis_inertia, inertia_matrix, slew_time_eigenaxis)
 from .config import MissionConfig
@@ -73,7 +88,12 @@ class ConopsResult:
     slew_seconds: float
     planned_slew_seconds: np.ndarray   # (S,) magnetically-priced slew durations
     slew_unreachable: int              # manoeuvres the field never permitted
-    battery_limited: bool
+    battery_limited: bool               # SOC went below the cell-protection floor
+    # Defaulted so a hand-built result (tests, fixtures) stays constructible.
+    mission_failed: bool = False        # SOC reached zero: the bus browned out
+    failure_time_s: float = float("nan")   # when, or NaN if it never did
+    unserved_wh: float = 0.0            # demand the empty battery could not meet
+    budget: "energy.EnergyBudget | None" = None   # thresholds it was scheduled on
 
     def mode_fractions(self) -> dict[str, float]:
         total = len(self.mode)
@@ -223,7 +243,8 @@ def simulate(cfg: MissionConfig,
              standby_dcm: np.ndarray,
              authority: TorqueAuthority,
              payload_rate_hz: float,
-             passes: list[comms.Pass]) -> ConopsResult:
+             passes: list[comms.Pass],
+             budget: energy.EnergyBudget | None = None) -> ConopsResult:
     """Run the mode scheduler over the whole propagation."""
     n = env.n_samples
     dt = env.dt_s
@@ -267,11 +288,19 @@ def simulate(cfg: MissionConfig,
     loads = power.mode_power_table(cfg)
     battery = cfg.spacecraft.battery
     capacity_wh = float(battery.capacity_wh)
-    soc_floor = 1.0 - float(battery.depth_of_discharge_limit)
+    hard_floor = 1.0 - float(battery.depth_of_discharge_limit)
     charge_efficiency = float(battery.round_trip_efficiency)
-    # Hysteresis so the scheduler does not chatter around the floor.
     policy = cfg.spacecraft.conops
-    soc_resume = soc_floor + float(policy.soc_resume_margin)
+
+    # Mode entry is decided by whether the battery can fund the activity and
+    # the recovery from it, worst case, in the dark. See `energy`.
+    if budget is None:
+        budget = energy.budget(cfg, env, authority, passes)
+    soc_safe = budget.soc_safe
+    soc_standby = budget.soc_standby
+    soc_experiment = budget.soc_experiment
+    # Hysteresis so the scheduler does not chatter on the safe boundary.
+    soc_safe_exit = soc_safe + float(policy.soc_resume_margin)
     downlink_trigger = float(policy.downlink_trigger_bytes)
     intra_mode_slew_threshold = math.radians(
         float(policy.intra_mode_slew_threshold_deg))
@@ -323,7 +352,10 @@ def simulate(cfg: MissionConfig,
     slew_seconds_planned: list[float] = []
     slew_unreachable = 0
     battery_limited = False
-    charging_hold = False
+    in_safe = False
+    mission_failed = False
+    failure_time_s = float("nan")
+    unserved_wh = 0.0
 
     usb_fps = comms.usb2_max_fps(cfg)
     effective_rate = min(payload_rate_hz, usb_fps)
@@ -338,31 +370,44 @@ def simulate(cfg: MissionConfig,
 
     for i in range(n):
         soc_now = level_wh / capacity_wh
-        if soc_now <= soc_floor + 1e-9:
-            charging_hold = True
+        if soc_now < hard_floor:
             battery_limited = True
-        elif soc_now >= soc_resume:
-            charging_hold = False
+        # Safe mode latches: once the reserve is gone the vehicle stays on
+        # survival loads until it has charged clear of the threshold again,
+        # rather than flicking back out the moment it touches it.
+        if soc_now < soc_safe:
+            in_safe = True
+        elif soc_now >= soc_safe_exit:
+            in_safe = False
 
         # -- choose the target mode -----------------------------------------
-        # Science is the discretionary activity; downlink is not. A low battery
-        # suspends experiments but must not suspend downlink, or the vehicle
-        # deadlocks: it stops sending, the backlog grows without bound, and the
-        # mission silently fails while the model reports a healthy SOC.
-        # Contacts are scarce (a few minutes each), so a pass is spent even at
-        # the cost of discharging.
+        # A ladder of energy thresholds, each one the cost of the activity plus
+        # the cost of recovering from it, worst case, in the dark. An activity
+        # is simply not entered unless the battery can already pay for the
+        # whole of it; nothing here has to be abandoned halfway for want of
+        # charge. Because the standby threshold is the safe threshold *plus* a
+        # whole worst-case contact, a downlink begun from standby can never
+        # drive the vehicle into safe mode -- that is what it is for.
+        #
         # In contact, or slewing to meet a contact that is about to start.
         # Bytes only move once the link is actually up -- ``link_bps`` is zero
         # before AOS -- so committing early costs pointing time, never data.
         in_contact = station_index[i] >= 0 and link_bps[i] > 0
-        if (in_contact or committed[i] >= 0) and backlog >= downlink_trigger:
+        wants_downlink = ((in_contact or committed[i] >= 0)
+                          and backlog >= downlink_trigger)
+        if in_safe:
+            target_mode = MODE_SAFE
+        elif wants_downlink and soc_now >= soc_standby:
             target_mode = MODE_DOWNLINK
-        elif charging_hold or not pointing.feasible[i]:
-            target_mode = MODE_STANDBY
-        else:
+        elif pointing.feasible[i] and soc_now >= soc_experiment:
             target_mode = MODE_EXPERIMENT
+        else:
+            target_mode = MODE_STANDBY
 
         target_dcm = {
+            # Safe points at the Sun: the survival attitude is the charging
+            # attitude, which is the whole point of retreating to it.
+            MODE_SAFE: standby_dcm[i],
             MODE_STANDBY: standby_dcm[i],
             MODE_EXPERIMENT: pointing.dcm_BN[i],
             MODE_DOWNLINK: dl_dcm[i],
@@ -454,6 +499,9 @@ def simulate(cfg: MissionConfig,
                 sent = min(sendable, backlog)
                 downlinked[i] = sent
                 backlog -= sent
+            elif current_mode == MODE_SAFE:
+                generation[i] = gen_standby[i]
+                load[i] = loads["safe"]
             else:
                 generation[i] = gen_standby[i]
                 load[i] = loads["standby"]
@@ -464,10 +512,24 @@ def simulate(cfg: MissionConfig,
         delta = (generation[i] - load[i]) * dt / 3600.0
         if delta > 0:
             delta *= charge_efficiency
+        # The battery is not held up at the depth-of-discharge limit. Clamping
+        # there would keep charging the mode's full load while quietly
+        # inventing the energy to pay for it, so the model would report a
+        # vehicle sitting at its floor doing science it could not power. The
+        # floor is a limit the scheduler is supposed to respect, and whether it
+        # does is a result, not an assumption -- so SOC is allowed through it,
+        # and dropping through it is what puts the vehicle in safe mode.
         level_wh = min(capacity_wh, level_wh + delta)
-        if level_wh < soc_floor * capacity_wh:
-            level_wh = soc_floor * capacity_wh
-            battery_limited = True
+        if level_wh <= 0.0:
+            # Past here there is no stored energy left to run anything: the bus
+            # browns out and the vehicle is lost. Record the first crossing and
+            # how much demand went unserved, and keep the arrays well formed --
+            # but nothing after this time means anything.
+            unserved_wh += -level_wh
+            level_wh = 0.0
+            if not mission_failed:
+                mission_failed = True
+                failure_time_s = float(env.t_s[i])
         soc[i] = level_wh / capacity_wh
         queue[i] = backlog
 
@@ -486,6 +548,10 @@ def simulate(cfg: MissionConfig,
         planned_slew_seconds=np.array(slew_seconds_planned),
         slew_unreachable=slew_unreachable,
         battery_limited=battery_limited,
+        mission_failed=mission_failed,
+        failure_time_s=failure_time_s,
+        unserved_wh=unserved_wh,
+        budget=budget,
     )
 
 
@@ -508,6 +574,14 @@ def summarise(cfg: MissionConfig, env: EnvironmentResult,
         "min_soc": float(np.min(result.soc)),
         "mean_soc": float(np.mean(result.soc)),
         "battery_limited": result.battery_limited,
+        "mission_failed": result.mission_failed,
+        "mission_failure_time_h": result.failure_time_s / 3600.0,
+        "unserved_wh": result.unserved_wh,
+        **({"soc_safe_entry": result.budget.soc_safe,
+            "soc_standby_entry": result.budget.soc_standby,
+            "soc_experiment_entry": result.budget.soc_experiment,
+            "soc_margin": result.budget.margin}
+           if result.budget is not None else {}),
         "mean_generation_w": float(np.mean(result.generation_w)),
         "mean_load_w": float(np.mean(result.load_w)),
         "energy_margin_w": float(np.mean(result.generation_w - result.load_w)),

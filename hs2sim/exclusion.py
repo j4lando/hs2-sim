@@ -33,7 +33,7 @@ from typing import Callable, Sequence
 
 import numpy as np
 
-from . import adcs, comms, conops, geometry, power
+from . import adcs, comms, conops, energy, geometry, power
 from .adcs import TorqueAuthority
 from .config import MissionConfig
 from .environment import EnvironmentResult
@@ -75,6 +75,7 @@ def sweep(cfg: MissionConfig,
           n_grid: int = 32,
           payload_rate_hz: float = 0.2,
           pointing_margin_deg: float | None = None,
+          budget: "energy.EnergyBudget | None" = None,
           log: Callable[[str], None] | None = None) -> dict:
     """Re-solve pointing and re-run the scheduler over the exclusion grid.
 
@@ -106,7 +107,8 @@ def sweep(cfg: MissionConfig,
                 array_normals=array.normals, array_weights=array.peak_w,
                 pointing_margin_deg=pointing_margin_deg)
             result = conops.simulate(trial, env, array, pointing, standby_dcm,
-                                     authority, payload_rate_hz, passes)
+                                     authority, payload_rate_hz, passes,
+                                     budget=budget)
             summary = conops.summarise(trial, env, result)
 
             feasible_fraction = float(np.mean(pointing.feasible))
@@ -226,6 +228,7 @@ def margin_sweep(cfg: MissionConfig,
                  *,
                  n_grid: int = 32,
                  payload_rate_hz: float = 0.2,
+                 budget: "energy.EnergyBudget | None" = None,
                  log: Callable[[str], None] | None = None) -> list[dict]:
     """Feasibility and science as a function of the pointing-error buffer.
 
@@ -245,7 +248,8 @@ def margin_sweep(cfg: MissionConfig,
             array_normals=array.normals, array_weights=array.peak_w,
             pointing_margin_deg=float(value))
         result = conops.simulate(cfg, env, array, pointing, standby_dcm,
-                                 authority, payload_rate_hz, passes)
+                                 authority, payload_rate_hz, passes,
+                                 budget=budget)
         summary = conops.summarise(cfg, env, result)
         rows.append({
             "margin_deg": float(value),

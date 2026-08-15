@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import math
+
 import numpy as np
 
 from helpers import orbit_env
 from hs2sim import comms, conops
+from hs2sim.config import MissionConfig
 
 
 def contact(station_index: int, start_s: float, end_s: float,
@@ -58,3 +61,69 @@ def test_a_contact_under_way_is_not_dropped_for_a_later_one():
     assert committed[int(1300 / 10)] == 0    # mid-pass, not pre-empted
     assert committed[int(1400 / 10)] == 7    # 7 takes over at 0's LOS
     assert committed[int(1590 / 10)] == 7
+
+
+def dark_env(n: int = 240, dt: float = 10.0):
+    """An orbit spent entirely in eclipse: nothing comes in from the array."""
+    env = orbit_env(n, dt, 5580.0)
+    env.shadow_factor[:] = 0.0
+    ang = 2 * np.pi * env.t_s / 5580.0
+    env.b_field_N = 3.5e-5 * np.stack(
+        [np.cos(ang), np.sin(ang), 0.3 * np.ones_like(ang)], axis=1)
+    return env
+
+
+def run_in_the_dark(cfg, env):
+    """Scheduler over an env with no sunlight and no station, so the battery
+    only ever discharges and nothing else can confuse the accounting."""
+    from hs2sim import adcs, geometry, power
+    array = power.all_array_geometries(cfg)[0]
+    standby = np.tile(np.eye(3), (env.n_samples, 1, 1))
+    pointing = geometry.PointingResult(
+        feasible=np.zeros(env.n_samples, bool),
+        dcm_BN=standby.copy(),
+        x_axis_N=np.tile([1.0, 0, 0], (env.n_samples, 1)),
+        z_axis_N=np.tile([0, 0, 1.0], (env.n_samples, 1)),
+        roll_used=np.zeros(env.n_samples),
+        array_power_frac=np.zeros(env.n_samples),
+        reject_reason=np.zeros(env.n_samples, int))
+    authority = adcs.torque_authority(cfg, env)
+    return conops.simulate(cfg, env, array, pointing, standby, authority,
+                           0.2, [])
+
+
+def test_the_battery_is_not_propped_up_at_the_cell_floor():
+    """SOC must be allowed through the floor.
+
+    Clamping there keeps charging the mode's full load while inventing the
+    energy to pay for it, so the model would report a vehicle sitting at its
+    floor running loads it cannot power. Whether the scheduler respects the
+    floor is a result, not an assumption.
+    """
+    cfg = MissionConfig().copy_with(**{"spacecraft.battery.capacity_wh": 0.4})
+    result = run_in_the_dark(cfg, dark_env())
+    floor = 1.0 - float(cfg.spacecraft.battery.depth_of_discharge_limit)
+    assert result.soc.min() < floor
+    assert result.battery_limited
+    # And it is monotonically falling: no step ever gains charge in the dark.
+    assert np.all(np.diff(result.soc) <= 1e-12)
+
+
+def test_an_emptied_battery_fails_the_mission():
+    cfg = MissionConfig().copy_with(**{"spacecraft.battery.capacity_wh": 0.05})
+    result = run_in_the_dark(cfg, dark_env())
+    assert result.mission_failed
+    assert result.soc.min() == 0.0
+    assert result.failure_time_s >= 0.0
+    # The demand the empty battery could not serve is reported, not absorbed.
+    assert result.unserved_wh > 0.0
+
+
+def test_a_healthy_battery_neither_fails_nor_breaches_the_floor():
+    cfg = MissionConfig()
+    env = dark_env(n=30)          # only a few minutes of dark
+    result = run_in_the_dark(cfg, env)
+    assert not result.mission_failed
+    assert not result.battery_limited
+    assert math.isnan(result.failure_time_s)
+    assert result.unserved_wh == 0.0

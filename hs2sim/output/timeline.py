@@ -98,14 +98,20 @@ def shared_ranges(cfg: MissionConfig, env: EnvironmentResult,
     comparing the geometries is the whole reason three of them are drawn.
     """
     lows, highs, soc_lows, soc_highs = [], [], [], []
+    thresholds: list[float] = []
     for flown in timelines.values():
         net_w, battery_w, soc_pct = _series(cfg, env, flown)
         lows.append(float(min(net_w.min(), battery_w.min())))
         highs.append(float(max(net_w.max(), battery_w.max())))
         soc_lows.append(float(soc_pct.min()))
         soc_highs.append(float(soc_pct.max()))
+        if flown.budget is not None:
+            thresholds += [flown.budget.soc_safe * 100.0,
+                           flown.budget.soc_standby * 100.0,
+                           flown.budget.soc_experiment * 100.0]
     return (_power_ylim(min(lows), max(highs)),
-            _soc_ylim(min(soc_lows), max(soc_highs), floor_percent(cfg)))
+            _soc_ylim(min(soc_lows), max(soc_highs), floor_percent(cfg),
+                      thresholds=thresholds))
 
 
 def _power_ylim(low: float, high: float) -> tuple[float, float]:
@@ -115,12 +121,18 @@ def _power_ylim(low: float, high: float) -> tuple[float, float]:
     return (low - 0.06 * span, high + 0.14 * span)
 
 
-def _soc_ylim(low: float, high: float, floor_pct: float) -> tuple[float, float]:
-    """The floor and full charge are always in frame, even when the vehicle
-    never approaches either: how much margin is being held is the point of the
-    panel, and a range cropped to the curve would hide it."""
-    low = min(low, floor_pct)
-    high = max(high, 100.0)
+def _soc_ylim(low: float, high: float, floor_pct: float,
+              thresholds: list[float] | None = None) -> tuple[float, float]:
+    """The floor, the mode-entry thresholds and full charge are always in
+    frame, even when the vehicle never approaches them: how much margin is
+    being held is the point of the panel, and a range cropped to the curve
+    would hide it."""
+    # A threshold above a full battery is unreachable by definition. Letting it
+    # set the range would stretch the axis to 200 % and flatten the curve that
+    # the panel exists to show; the legend still reports its value.
+    in_frame = [v for v in (thresholds or []) if 0.0 <= v <= 100.0]
+    low = min([low, floor_pct] + in_frame)
+    high = max([high, 100.0] + in_frame)
     span = max(high - low, 1.0)
     return (low - 0.12 * span, high + 0.12 * span)
 
@@ -171,6 +183,14 @@ def battery_power(cfg: MissionConfig, env: EnvironmentResult,
 
     net_w, battery_w, soc_pct = _series(cfg, env, flown)
     floor_pct = floor_percent(cfg)
+    # The thresholds the scheduler actually flew, drawn where the SOC curve can
+    # be read against them: each band is an activity the vehicle could afford.
+    entries = []
+    if flown.budget is not None:
+        entries = [("safe entry", flown.budget.soc_safe * 100.0),
+                   ("downlink affordable", flown.budget.soc_standby * 100.0),
+                   ("experiment affordable",
+                    flown.budget.soc_experiment * 100.0)]
 
     eclipsed = env.shadow_factor < 0.5      # same umbra test as the summary
     mode_names = np.array([MODE_NAMES.get(int(m), "") for m in flown.mode])
@@ -182,7 +202,8 @@ def battery_power(cfg: MissionConfig, env: EnvironmentResult,
                            float(max(net_w.max(), battery_w.max())))
     if soc_ylim is None:
         soc_ylim = _soc_ylim(float(soc_pct.min()), float(soc_pct.max()),
-                             floor_pct)
+                             floor_pct,
+                             thresholds=[v for _, v in entries])
 
     modes_seen = [name for name in MODE_WASH if np.any(mode_names == name)]
     handles = [Patch(facecolor=MODE_WASH[name], alpha=MODE_WASH_ALPHA,
@@ -199,8 +220,13 @@ def battery_power(cfg: MissionConfig, env: EnvironmentResult,
         # The charge curve itself needs no legend entry -- it is the only
         # series in its panel and the panel's axis label names it.
         Line2D([], [], color=LIMIT_LINE, lw=1.0, ls="--",
-               label=f"discharge floor ({floor_pct:.0f} % SOC)"),
+               label=f"cell floor ({floor_pct:.0f} % SOC)"),
     ]
+    if entries:
+        handles.append(
+            Line2D([], [], color=INK_MUTED, lw=0.9, ls=(0, (1, 2)),
+                   label="mode entry: " + ", ".join(
+                       f"{name} {value:.0f} %" for name, value in entries)))
 
     written: list[pathlib.Path] = []
     numbered = list(enumerate(segments, start=1))
@@ -299,6 +325,9 @@ def battery_power(cfg: MissionConfig, env: EnvironmentResult,
 
             ax_soc.axhline(floor_pct, color=LIMIT_LINE, ls="--", lw=1.0,
                            zorder=2)
+            for _, value in entries:
+                ax_soc.axhline(value, color=INK_MUTED, ls=(0, (1, 2)), lw=0.9,
+                               zorder=2)
             ax_soc.plot(minutes, soc_pct[start:stop], color=INK, lw=1.3,
                         zorder=4)
 

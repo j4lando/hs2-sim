@@ -22,8 +22,8 @@ import time
 
 import numpy as np
 
-from hs2sim import (adcs, comms, conops, environment, exclusion, geometry,
-                    power, thermal)
+from hs2sim import (adcs, comms, conops, energy, environment, exclusion,
+                    geometry, power, thermal)
 from hs2sim.config import MissionConfig, RESULTS_DIR
 
 
@@ -58,6 +58,10 @@ def main() -> int:
                         help="override time step in seconds")
     parser.add_argument("--quick", action="store_true",
                         help="short run with a coarse attitude search")
+    parser.add_argument("--soc-margin", type=float, default=None,
+                        metavar="FACTOR",
+                        help="reserve on top of every worst-case mode-entry "
+                             "energy budget (default 1.20, i.e. 20 %% higher)")
     parser.add_argument("--vizard", metavar="GEOMETRY", nargs="?",
                         const="__best__", default=None,
                         help="export the CONOPS timeline for Vizard playback; "
@@ -164,6 +168,16 @@ def main() -> int:
         f"p90 {slews['90deg']['p90_s']/60:.1f} min, "
         f"eigenaxis-along-B {slews['90deg']['worst_axis_s']/60:.1f} min")
 
+    # ------------------------------------------- mode-entry energy budget
+    # Worst case first: every threshold below is derived from what an activity
+    # plus its recovery actually costs, not from a number chosen up front.
+    log("Pricing the worst-case excursions that set the mode thresholds...")
+    mode_budget = energy.budget(cfg, env, authority, passes,
+                                margin=args.soc_margin)
+    for line in mode_budget.table():
+        log("  " + line)
+    results["energy_budget"] = mode_budget.as_dict()
+
     # ------------------------------------------------ payload rate ceilings
     usb_fps = comms.usb2_max_fps(cfg)
     img_b = comms.image_bytes(cfg)
@@ -245,7 +259,8 @@ def main() -> int:
         # at the baseline payload rate.
         baseline_rate = 0.2
         result = conops.simulate(cfg, env, array, pointing, standby_dcm,
-                                 authority, baseline_rate, passes)
+                                 authority, baseline_rate, passes,
+                                 budget=mode_budget)
         entry["conops_baseline"] = conops.summarise(cfg, env, result)
 
         # Single-node thermal: internal dissipation follows the flown mode.
@@ -299,7 +314,8 @@ def main() -> int:
         sweep = []
         for rate in cfg.mission.analysis.payload_rate_hz_sweep:
             r = conops.simulate(cfg, env, array, pointing, standby_dcm,
-                                authority, float(rate), passes)
+                                authority, float(rate), passes,
+                                budget=mode_budget)
             s = conops.summarise(cfg, env, r)
             s["requested_rate_hz"] = float(rate)
             sweep.append(s)
@@ -332,7 +348,7 @@ def main() -> int:
             cfg, env, array_by_name[reference], standby_attitudes[reference],
             authority, passes,
             lost_deg=sweep_cfg.lost_deg, found_deg=sweep_cfg.found_deg,
-            n_grid=n_grid, payload_rate_hz=rate, log=log)
+            n_grid=n_grid, payload_rate_hz=rate, budget=mode_budget, log=log)
         sweep_result["reference_geometry"] = reference
 
         # Self-check: the sweep re-solves pointing on a coarser azimuth/roll
@@ -367,7 +383,7 @@ def main() -> int:
         sweep_result["margin_sweep"] = exclusion.margin_sweep(
             cfg, env, array_by_name[reference], standby_attitudes[reference],
             authority, passes, margins, n_grid=n_grid, payload_rate_hz=rate,
-            log=log)
+            budget=mode_budget, log=log)
         sweep_result["margin_character"] = exclusion.margin_characterise(
             sweep_result, adcs.pointing_margin_deg(cfg))
 
@@ -390,7 +406,8 @@ def main() -> int:
                 authority, passes,
                 lost_deg=sweep_cfg.lost_deg, found_deg=sweep_cfg.found_deg,
                 n_grid=n_grid, payload_rate_hz=rate,
-                pointing_margin_deg=float(uncertainty), log=None)
+                pointing_margin_deg=float(uncertainty), budget=mode_budget,
+                log=None)
             grid["reference_geometry"] = reference
             grid["baseline"] = {"lost_deg": baseline_lost,
                                 "found_deg": baseline_found}

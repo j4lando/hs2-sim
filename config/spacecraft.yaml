@@ -314,6 +314,12 @@ conops:
   # Resume science once SOC recovers this far above the DoD floor, so the
   # scheduler does not chatter at the boundary.
   soc_resume_margin: 0.10        # [assumed]
+  # Reserve carried on top of every worst-case energy budget that sets a mode
+  # entry threshold (see hs2sim/energy.py). Applied to each excursion's own
+  # cost, with the ladder stacked on the cell-protection floor. Overridable per
+  # run with --soc-margin.
+  # [assumed] 20 % on top of worst case.
+  soc_margin: 1.20
   # Attitude change above this is treated as a real reorientation (costing a
   # magnetorquer-limited slew) rather than smooth target tracking. Repoints
   # this large do occur inside experiment mode when the sunlit-limb and Sun
