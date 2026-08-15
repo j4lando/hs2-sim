@@ -113,7 +113,8 @@ def test_no_floor_does_not_drag_the_range_down_to_empty():
     the curve the panel exists to show, and empty is not a limit anyway -- it
     is the failure.
     """
-    cfg = MissionConfig()
+    cfg = MissionConfig().copy_with(
+        **{"spacecraft.battery.depth_of_discharge_limit": 1.0})
     assert timeline.floor_percent(cfg) == 0.0
     env = orbit_env(64, 10.0, 5580.0)
     _, soc_ylim = timeline.shared_ranges(

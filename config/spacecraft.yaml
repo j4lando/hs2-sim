@@ -108,10 +108,10 @@ solar_array:
 battery:
   capacity_wh: 75.6            # [given]
   # Fraction of the pack the scheduler is allowed to discharge, so the SOC
-  # floor is (1 - this). At 1.0 there is no cell-protection floor at all: the
-  # whole battery may be spent and the only hard limit is empty. Mode entry is
-  # then governed entirely by the worst-case energy budgets in hs2sim/energy.py.
-  depth_of_discharge_limit: 1.0
+  # floor is (1 - this): 0.80 keeps SOC above 20 %. Set it to 1.0 for no
+  # cell-protection floor at all. The mode-entry thresholds in
+  # hs2sim/energy.py stack on top of whatever floor this leaves.
+  depth_of_discharge_limit: 0.80   # [assumed] 80 % DoD -> 20 % SOC floor
   round_trip_efficiency: 0.95      # [assumed]
   initial_soc: 0.90
 
