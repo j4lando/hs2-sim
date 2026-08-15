@@ -76,7 +76,7 @@ def flat_timeline(n: int, generation_w: float, load_w: float,
         downlinked_bytes=np.zeros(n), queue_bytes=np.zeros(n),
         tracking_rate=np.zeros(n), slew_count=0, slew_seconds=0.0,
         planned_slew_seconds=np.zeros(0), slew_unreachable=0,
-        battery_limited=False)
+        slew_abandoned=0, battery_limited=False)
 
 
 def test_shared_ranges_span_every_geometry():

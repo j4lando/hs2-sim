@@ -64,6 +64,11 @@ MODE_DOWNLINK = 4
 # so a pathological geometry cannot stall the run.
 SLEW_GIVE_UP_S = 6.0 * 3600.0
 
+# How far past its own priced duration a manoeuvre may run before it is
+# abandoned. A slew that overruns this much is not slow, it is chasing a target
+# moving faster than the vehicle can turn, and it will never arrive.
+SLEW_OVERRUN_FACTOR = 2.0
+
 MODE_NAMES = {
     MODE_SAFE: "safe",
     MODE_STANDBY: "standby",
@@ -88,6 +93,7 @@ class ConopsResult:
     slew_seconds: float
     planned_slew_seconds: np.ndarray   # (S,) magnetically-priced slew durations
     slew_unreachable: int              # manoeuvres the field never permitted
+    slew_abandoned: int                # manoeuvres given up as unconvergeable
     battery_limited: bool               # SOC went below the cell-protection floor
     # Defaulted so a hand-built result (tests, fixtures) stays constructible.
     mission_failed: bool = False        # SOC reached zero: the bus browned out
@@ -351,6 +357,9 @@ def simulate(cfg: MissionConfig,
     slew_seconds = 0.0
     slew_seconds_planned: list[float] = []
     slew_unreachable = 0
+    slew_abandoned = 0
+    slew_budget_s = 0.0
+    slew_elapsed_s = 0.0
     battery_limited = False
     in_safe = False
     mission_failed = False
@@ -395,7 +404,18 @@ def simulate(cfg: MissionConfig,
         in_contact = station_index[i] >= 0 and link_bps[i] > 0
         wants_downlink = ((in_contact or committed[i] >= 0)
                           and backlog >= downlink_trigger)
-        if in_safe:
+        if slewing and not in_safe:
+            # A manoeuvre in progress is *committed*. Re-deciding the target
+            # every sample is what let whole orbits disappear into SLEW: the
+            # vehicle would start turning toward the experiment attitude, have
+            # a contact commitment open a few samples later, chase that
+            # instead, then be sent back when the commitment closed -- a
+            # rate-limited follower pursuing a target that teleports between
+            # three attitudes never arrives at any of them. Real vehicles
+            # execute the manoeuvre they were commanded. Only the battery may
+            # interrupt, which is why safe is tested above this.
+            target_mode = pending_mode
+        elif in_safe:
             target_mode = MODE_SAFE
         elif wants_downlink and soc_now >= soc_standby:
             target_mode = MODE_DOWNLINK
@@ -455,6 +475,8 @@ def simulate(cfg: MissionConfig,
                     seconds = SLEW_GIVE_UP_S
                     slew_unreachable += 1
                 slew_rate = angle_to_target / seconds
+                slew_budget_s = seconds * SLEW_OVERRUN_FACTOR
+                slew_elapsed_s = 0.0
                 slew_seconds_planned.append(seconds)
             elif mode_changed:
                 current_mode = target_mode
@@ -477,9 +499,23 @@ def simulate(cfg: MissionConfig,
                                   * env.shadow_factor[i] * array_efficiency)
             load[i] = loads["slew"]
             slew_seconds += dt
+            slew_elapsed_s += dt
             if principal_angle(current_dcm, target_dcm) <= pointing_accuracy:
                 slewing = False
                 current_mode = pending_mode
+            elif (slew_elapsed_s > slew_budget_s
+                    and pending_mode != MODE_STANDBY):
+                # Overrunning its own priced duration by this much means the
+                # target is running away faster than the vehicle can turn --
+                # a station crossing overhead does exactly this. Give the
+                # manoeuvre up and go sun-pointing instead of chasing for the
+                # rest of the orbit; standby is slow-moving, so this converges.
+                slew_abandoned += 1
+                pending_mode = MODE_STANDBY
+                target_dcm = standby_dcm[i]
+                angle = principal_angle(current_dcm, target_dcm)
+                slew_rate = max(slew_rate, angle / max(slew_budget_s, dt))
+                slew_budget_s = slew_elapsed_s + SLEW_GIVE_UP_S
         else:
             mode[i] = current_mode
             # Continuous tracking within the mode: record how fast the target
@@ -494,11 +530,18 @@ def simulate(cfg: MissionConfig,
                 backlog += experiments[i] * per_experiment_bytes
             elif current_mode == MODE_DOWNLINK:
                 generation[i] = gen_downlink[i]
-                load[i] = loads["downlink"]
-                sendable = link_bps[i] * dt / 8.0
-                sent = min(sendable, backlog)
-                downlinked[i] = sent
-                backlog -= sent
+                if link_bps[i] > 0.0:
+                    load[i] = loads["downlink"]
+                    sendable = link_bps[i] * dt / 8.0
+                    sent = min(sendable, backlog)
+                    downlinked[i] = sent
+                    backlog -= sent
+                else:
+                    # Aimed at a station that has not risen yet. The antenna is
+                    # pointed but the transmitter is NOT keyed: charging the
+                    # full downlink load here would burn 10 W of RF into the
+                    # ground for minutes before every pass and send nothing.
+                    load[i] = loads["standby"]
             elif current_mode == MODE_SAFE:
                 generation[i] = gen_standby[i]
                 load[i] = loads["safe"]
@@ -547,6 +590,7 @@ def simulate(cfg: MissionConfig,
         slew_seconds=slew_seconds,
         planned_slew_seconds=np.array(slew_seconds_planned),
         slew_unreachable=slew_unreachable,
+        slew_abandoned=slew_abandoned,
         battery_limited=battery_limited,
         mission_failed=mission_failed,
         failure_time_s=failure_time_s,
@@ -597,6 +641,7 @@ def summarise(cfg: MissionConfig, env: EnvironmentResult,
             float(np.max(result.planned_slew_seconds)) / 60.0
             if result.planned_slew_seconds.size else 0.0),
         "slews_unreachable": result.slew_unreachable,
+        "slews_abandoned": result.slew_abandoned,
         "max_tracking_rate_dps": float(np.degrees(np.max(result.tracking_rate))),
         "mean_tracking_rate_dps": float(np.degrees(np.mean(result.tracking_rate))),
         **{f"frac_{name}": value for name, value in result.mode_fractions().items()},

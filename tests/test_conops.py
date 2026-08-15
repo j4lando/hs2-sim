@@ -132,3 +132,107 @@ def test_a_healthy_battery_neither_fails_nor_breaches_the_floor():
     assert not result.battery_limited
     assert math.isnan(result.failure_time_s)
     assert result.unserved_wh == 0.0
+
+
+def sunlit_env(n: int = 900, dt: float = 10.0):
+    """Fully sunlit orbit with a turning field, so the battery stays healthy
+    and slew pricing is finite -- leaving mode logic as the only variable."""
+    env = orbit_env(n, dt, 5580.0)
+    env.shadow_factor[:] = 1.0
+    ang = 2 * np.pi * env.t_s / 5580.0
+    env.b_field_N = 3.5e-5 * np.stack(
+        [np.cos(ang), np.sin(ang), 0.3 * np.ones_like(ang)], axis=1)
+    return env
+
+
+def run_with_pass(cfg, env, feasible, pass_window=None):
+    from hs2sim import adcs, geometry, power
+    n = env.n_samples
+    array = power.all_array_geometries(cfg)[0]
+    standby = np.tile(np.eye(3), (n, 1, 1))
+    # An experiment attitude a long way from standby, so wanting it costs a
+    # real slew rather than a nudge.
+    turned = np.tile(np.diag([1.0, -1.0, -1.0]), (n, 1, 1))
+    pointing = geometry.PointingResult(
+        feasible=feasible, dcm_BN=turned,
+        x_axis_N=np.tile([1.0, 0, 0], (n, 1)),
+        z_axis_N=np.tile([0, 0, 1.0], (n, 1)),
+        roll_used=np.zeros(n), array_power_frac=np.zeros(n),
+        reject_reason=np.zeros(n, int))
+    passes = []
+    if pass_window is not None:
+        start, stop = pass_window
+        env.station_access[0, start:stop] = True
+        env.station_range[0, :] = 800e3
+        passes = [contact(0, float(env.t_s[start]), float(env.t_s[stop]))]
+    authority = adcs.torque_authority(cfg, env)
+    return conops.simulate(cfg, env, array, pointing, standby, authority,
+                           0.2, passes)
+
+
+def test_the_transmitter_is_not_keyed_before_the_station_rises():
+    """Committing to a contact early must cost pointing, not 10 W of RF.
+
+    The vehicle turns toward a station up to a lead time before AOS. Charging
+    the full downlink load through that window would burn the transmitter into
+    the ground for minutes before every pass and send nothing.
+    """
+    from hs2sim import power
+    env = sunlit_env()
+    cfg = MissionConfig()
+    result = run_with_pass(cfg, env, np.zeros(env.n_samples, bool),
+                           pass_window=(600, 660))
+    loads = power.mode_power_table(cfg)
+    in_downlink = result.mode == conops.MODE_DOWNLINK
+    no_link = ~env.station_access[0]
+    keyed_early = in_downlink & no_link
+    if keyed_early.any():
+        assert result.load_w[keyed_early].max() <= loads["standby"] + 1e-9
+    # And nothing is ever sent while the station is below the horizon.
+    assert result.downlinked_bytes[no_link].sum() == 0.0
+
+
+def test_a_target_that_outruns_the_vehicle_is_abandoned_to_sun_pointing():
+    """A manoeuvre that cannot converge must be given up, not chased forever.
+
+    A station crossing overhead moves faster than a magnetorquer-only 3U can
+    turn, so a rate-limited follower aimed at one never arrives. Left alone it
+    burns the rest of the orbit in SLEW. Here the commanded attitude spins far
+    faster than any achievable slew rate, which is that case in the limit.
+    """
+    from hs2sim import adcs, geometry, power
+    env = sunlit_env()
+    n = env.n_samples
+    cfg = MissionConfig()
+    array = power.all_array_geometries(cfg)[0]
+    standby = np.tile(np.eye(3), (n, 1, 1))
+    # An experiment attitude tumbling at ~9 deg per sample -- far beyond the
+    # few tenths of a degree per second the vehicle can manage.
+    spin = np.zeros((n, 3, 3))
+    for i in range(n):
+        a = 0.157 * i
+        spin[i] = np.array([[math.cos(a), -math.sin(a), 0.0],
+                            [math.sin(a), math.cos(a), 0.0],
+                            [0.0, 0.0, 1.0]])
+    pointing = geometry.PointingResult(
+        feasible=np.ones(n, bool), dcm_BN=spin,
+        x_axis_N=np.tile([1.0, 0, 0], (n, 1)),
+        z_axis_N=np.tile([0, 0, 1.0], (n, 1)),
+        roll_used=np.zeros(n), array_power_frac=np.zeros(n),
+        reject_reason=np.zeros(n, int))
+    authority = adcs.torque_authority(cfg, env)
+    result = conops.simulate(cfg, env, array, pointing, standby, authority,
+                             0.2, [])
+
+    assert result.slew_abandoned > 0, "an unconvergeable slew was never given up"
+    # Each giving-up redirects to sun-pointing and the scheduler then commands
+    # afresh, so the run is a sequence of bounded manoeuvres rather than one
+    # open-ended chase.
+    assert result.slew_count >= result.slew_abandoned > 1
+
+
+def test_abandoned_slews_are_counted_in_the_summary():
+    env = sunlit_env(n=200)
+    result = run_with_pass(MissionConfig(), env, np.zeros(200, bool))
+    summary = conops.summarise(MissionConfig(), env, result)
+    assert summary["slews_abandoned"] == result.slew_abandoned
