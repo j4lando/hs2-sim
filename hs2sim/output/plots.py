@@ -14,7 +14,7 @@ import pathlib
 from ..config import MissionConfig
 from ..conops import ConopsResult
 from ..environment import EnvironmentResult
-from . import exclusion_plots, overview, timeline
+from . import dashboard, exclusion_plots, overview, timeline
 
 
 def make_all(cfg: MissionConfig, env: EnvironmentResult,
@@ -70,3 +70,7 @@ def make_all(cfg: MissionConfig, env: EnvironmentResult,
             timeline.battery_power(cfg, env, flown, out_dir, plt,
                                    geometry_name=name, period_min=period_min,
                                    ylim=ylim, soc_ylim=soc_ylim)
+        # The same timelines, browsable: one self-contained page with the data
+        # inlined, so a question about a particular orbit does not need a
+        # re-run or a hunt through 24 PNGs.
+        dashboard.build(cfg, env, results, timelines, out_dir)

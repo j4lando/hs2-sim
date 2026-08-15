@@ -5,5 +5,5 @@ Everything here consumes results already computed by the physics modules in
 analysis of its own -- it only renders or exports them.
 """
 
-__all__ = ["exclusion_plots", "overview", "plots", "style", "timeline",
-           "vizard", "vizcheck"]
+__all__ = ["dashboard", "exclusion_plots", "overview", "plots",
+           "style", "timeline", "vizard", "vizcheck"]

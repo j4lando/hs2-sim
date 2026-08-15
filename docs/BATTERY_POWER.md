@@ -4,6 +4,10 @@
 `run_analysis.py` for **every** array geometry, so the three candidates can be
 compared orbit by orbit rather than only through their averages.
 
+For the same data as a browsable page — scrub through orbits, hover for a
+shared cursor, and see storage and link rate alongside — see
+[DASHBOARD.md](DASHBOARD.md).
+
 ## What it draws
 
 Each orbit gets a tall **power panel** over a short **state-of-charge panel**
