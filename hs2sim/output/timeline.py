@@ -189,6 +189,8 @@ def battery_power(cfg: MissionConfig, env: EnvironmentResult,
                      edgecolor="none", label=name)
                for name in modes_seen]
     handles += [
+        Line2D([], [], color=MODE_WASH["downlink"], marker="v", ms=5, ls="none",
+               label="downlink contact"),
         Patch(facecolor=INK_SECONDARY, edgecolor="none",
               label="eclipse (band at top)"),
         Line2D([], [], color=INK, lw=1.3, label="generation - load"),
@@ -261,6 +263,17 @@ def battery_power(cfg: MissionConfig, env: EnvironmentResult,
                 # swamps the curve.
                 ax_soc.axvspan(edge[a], edge[b], facecolor=colour,
                                alpha=0.6 * MODE_WASH_ALPHA, lw=0, zorder=0)
+                if name == "downlink":
+                    # A contact clears the backlog in seconds -- the downlink
+                    # budget is enormously over-provisioned -- so a truthful
+                    # wash for one is often a single sample, which is sub-pixel
+                    # on a 90-minute axis and reads as "it never downlinked".
+                    # Mark the contact so it can be found, and leave the wash
+                    # itself honest about how long it actually lasted.
+                    ax.plot(0.5 * (edge[a] + edge[b]), WASH_TOP - 0.05,
+                            marker="v", ms=5, color=MODE_WASH["downlink"],
+                            transform=ax.get_xaxis_transform(), zorder=7,
+                            clip_on=False)
 
             # Eclipse rides in its own strip above the washes on the power
             # panel, and drops a hairline through both at each terminator

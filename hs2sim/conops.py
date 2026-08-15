@@ -184,6 +184,38 @@ def downlink_attitude(env: EnvironmentResult,
     return dcm
 
 
+def downlink_commitment(env: EnvironmentResult,
+                        passes: list[comms.Pass],
+                        lead_s: float) -> np.ndarray:
+    """(N,) station to be pointed at per sample, or -1.
+
+    A contact is committed to ``lead_s`` before the station rises rather than
+    at AOS. The repoint from the standby attitude to the downlink attitude is
+    a median ~50 deg, and a magnetorquer-only 3U turns at a few tenths of a
+    degree per second, so a slew begun at AOS eats the whole of a five-minute
+    pass; worse, the station then crosses the sky faster than the vehicle can
+    slew, so a follower that starts late is chasing a target running away from
+    it and never arrives at all. Passes come from the ephemeris, so committing
+    early is scheduling, not clairvoyance.
+    """
+    committed = np.full(env.n_samples, -1, dtype=int)
+    # Earliest pass first, and a sample already claimed stays claimed. There is
+    # one antenna: a contact under way must not be dropped because a later
+    # station's lead-in overlaps it, and a pass whose whole lead-in falls inside
+    # another contact simply does not get a pre-slew.
+    for contact in sorted(passes, key=lambda p: p.start_s):
+        if contact.bytes_capacity <= 0:
+            continue        # link never closes; not worth pointing at
+        first = int(np.searchsorted(env.t_s, contact.start_s - lead_s, "left"))
+        # A sample stamped t covers [t, t+dt), so one starting exactly at LOS
+        # is already past the pass.
+        last = int(np.searchsorted(env.t_s, contact.end_s, "left"))
+        window = committed[first:last]
+        committed[first:last] = np.where(window < 0, contact.station_index,
+                                         window)
+    return committed
+
+
 def simulate(cfg: MissionConfig,
              env: EnvironmentResult,
              array: power.ArrayGeometry,
@@ -204,7 +236,23 @@ def simulate(cfg: MissionConfig,
     station_index = np.where(visible, best_station, -1)
 
     station_pos_N = environment.station_positions_inertial(cfg, env)
-    dl_dcm = downlink_attitude(env, station_index, standby_dcm, station_pos_N)
+
+    # Contacts are committed to *before* the station rises. A magnetorquer slew
+    # to the downlink attitude is a median ~50 deg repoint, which at the few
+    # tenths of a degree per second this vehicle can manage eats most of a
+    # five-minute pass; and the station then crosses the sky faster than the
+    # slew rate, so a follower that starts at AOS is chasing a target running
+    # away from it and never arrives. Reacting to visibility alone therefore
+    # spends every contact turning and downlinks nothing. The pass list is
+    # known from the ephemeris, so the slew starts ahead of AOS instead.
+    committed = downlink_commitment(
+        env, passes, float(cfg.spacecraft.conops.downlink_lead_time_s))
+    # A station that is actually up wins over one that is merely coming: the
+    # visible one is the link being flown, the committed one only says where to
+    # be pointed when it rises.
+    aim_station = np.where(station_index >= 0, station_index, committed)
+
+    dl_dcm = downlink_attitude(env, aim_station, standby_dcm, station_pos_N)
 
     # Achievable information rate while a station is up.
     best_range = np.where(visible, np.min(ranges, axis=0), 1e12)
@@ -303,8 +351,11 @@ def simulate(cfg: MissionConfig,
         # mission silently fails while the model reports a healthy SOC.
         # Contacts are scarce (a few minutes each), so a pass is spent even at
         # the cost of discharging.
-        if (station_index[i] >= 0 and link_bps[i] > 0
-                and backlog >= downlink_trigger):
+        # In contact, or slewing to meet a contact that is about to start.
+        # Bytes only move once the link is actually up -- ``link_bps`` is zero
+        # before AOS -- so committing early costs pointing time, never data.
+        in_contact = station_index[i] >= 0 and link_bps[i] > 0
+        if (in_contact or committed[i] >= 0) and backlog >= downlink_trigger:
             target_mode = MODE_DOWNLINK
         elif charging_hold or not pointing.feasible[i]:
             target_mode = MODE_STANDBY

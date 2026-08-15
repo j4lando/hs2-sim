@@ -107,7 +107,7 @@ solar_array:
 
 battery:
   capacity_wh: 75.6            # [given]
-  depth_of_discharge_limit: 0.30   # [assumed] keep SOC above 70 % for cycle life
+  depth_of_discharge_limit: 0.50   # [assumed] keep SOC above 50 %
   round_trip_efficiency: 0.95      # [assumed]
   initial_soc: 0.90
 
@@ -303,6 +303,14 @@ conops:
   # housekeeping. Only break off science once the backlog is worth a pass.
   # [assumed] roughly one pass worth of data at a low rate.
   downlink_trigger_bytes: 500000
+  # How far ahead of AOS the vehicle starts turning to meet a pass. The
+  # standby-to-downlink repoint is a median ~50 deg, and this vehicle turns at
+  # a few tenths of a degree per second, so a slew begun at AOS consumes the
+  # whole contact and nothing is sent. Sized to cover that median repoint with
+  # room to settle; passes are known from the ephemeris, so nothing here is
+  # clairvoyant.
+  # [assumed] 4 min, from the modelled magnetorquer slew rate.
+  downlink_lead_time_s: 240.0
   # Resume science once SOC recovers this far above the DoD floor, so the
   # scheduler does not chatter at the boundary.
   soc_resume_margin: 0.10        # [assumed]
