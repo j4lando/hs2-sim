@@ -20,23 +20,15 @@ excursion is priced with no generation at all -- the vehicle is assumed to be
 in eclipse throughout, which is when the cost is highest and when a mode
 decision most needs to be right.
 
-Two things set where the ladder starts and how the margin is applied, and both
-are worth stating because neither is forced by the words above:
+The margin is a multiplier on each excursion's own cost and is never re-applied
+to the running total, so it does not compound up the ladder: at a margin of 2,
+the experiment threshold carries twice a science block plus twice a contact
+plus twice the survival reserve, not eight times the survival reserve.
 
-*The ladder is built on the cell-protection floor, not on zero.* Energy below
-the depth-of-discharge limit is not the scheduler's to spend, so the survival
-reserve has to sit on top of that limit. Measuring it from an empty battery
-instead puts every threshold under the floor -- with the numbers this vehicle
-actually has, safe entry lands near 10 % SOC -- and the floor stops meaning
-anything.
-
-*The margin is applied to each activity's own cost, not re-applied to the
-running total.* Compounding it up the ladder inflates the survival reserve by
-``margin`` again at every level, and with a 50 % floor it drives the experiment
-threshold past a full battery, i.e. science becomes impossible on paper for
-reasons that are pure double counting. The compounded figures are still
-computed and reported next to the ones in use, so the difference is visible
-rather than assumed away.
+The ladder is stacked on the battery's depth-of-discharge limit, which is
+configurable and currently zero -- the scheduler may spend the whole battery
+and the only hard limit is empty. Set that limit non-zero and every threshold
+rises with it, since energy below it is not the scheduler's to spend.
 """
 
 from __future__ import annotations
@@ -95,9 +87,6 @@ class EnergyBudget:
     soc_safe: float
     soc_standby: float
     soc_experiment: float
-    # The literal compounding reading, for comparison only -- see the module
-    # docstring. Nothing schedules on these.
-    compounded: tuple[float, float, float] = (0.0, 0.0, 0.0)
 
     @property
     def experiment_affordable(self) -> bool:
@@ -127,14 +116,11 @@ class EnergyBudget:
                              f"{step.seconds / 60:6.1f} min x "
                              f"{step.watts:6.2f} W = {step.wh:6.2f} Wh")
         lines += [
-            f"  SOC thresholds on a {self.hard_floor_soc * 100:.0f} % cell "
-            f"floor, margin {self.margin:.2f} per excursion: "
+            f"  SOC thresholds (margin {self.margin:.2f} per excursion, not "
+            f"compounded, on a {self.hard_floor_soc * 100:.0f} % floor): "
             f"safe {self.soc_safe * 100:.1f} %, "
             f"standby/downlink {self.soc_standby * 100:.1f} %, "
             f"experiment {self.soc_experiment * 100:.1f} %",
-            f"  (margin compounded on the running total instead would give "
-            f"{self.compounded[0] * 100:.1f} / {self.compounded[1] * 100:.1f} "
-            f"/ {self.compounded[2] * 100:.1f} %)",
         ]
         if not self.downlink_affordable:
             lines.append("  WARNING: a worst-case contact costs more than the "
@@ -148,7 +134,7 @@ class EnergyBudget:
     def as_dict(self) -> dict:
         return {
             "margin": self.margin,
-            "margin_applied": "per excursion, stacked on the cell floor",
+            "margin_applied": "per excursion, not compounded",
             "capacity_wh": self.capacity_wh,
             "worst_case_inputs": {
                 "slew_deg": WORST_SLEW_DEG,
@@ -174,11 +160,6 @@ class EnergyBudget:
                 "standby_downlink": self.soc_standby,
                 "experiment": self.soc_experiment,
                 "hard_cell_floor": self.hard_floor_soc,
-            },
-            "soc_thresholds_if_margin_compounded": {
-                "safe": self.compounded[0],
-                "standby_downlink": self.compounded[1],
-                "experiment": self.compounded[2],
             },
             "downlink_affordable": self.downlink_affordable,
             "experiment_affordable": self.experiment_affordable,
@@ -230,22 +211,15 @@ def budget(cfg: MissionConfig, env: EnvironmentResult,
         Step("worst slew back to sun-pointing", slew_s, loads["slew"]),
     ])
 
-    # Each level is the level below it plus its own margined cost, stacked on
-    # the cell floor because energy under that floor is not the scheduler's to
-    # spend. Standby entry is safe entry plus a *whole* worst-case contact,
-    # which is precisely what makes a downlink begun from standby unable to
-    # push the vehicle into safe mode.
+    # Each level is the level below it plus its own margined cost. The margin
+    # multiplies that one excursion and is not re-applied to the total, so it
+    # does not compound. Standby entry is safe entry plus a *whole* worst-case
+    # contact, which is precisely what makes a downlink begun from standby
+    # unable to push the vehicle into safe mode.
     hard_floor = 1.0 - float(battery.depth_of_discharge_limit)
     soc_safe = hard_floor + margin * survival.wh / capacity_wh
     soc_standby = soc_safe + margin * downlink.wh / capacity_wh
     soc_experiment = soc_standby + margin * experiment.wh / capacity_wh
-
-    # The literal "(level below + this excursion) * margin" reading, reported
-    # so the cost of compounding is visible instead of argued about.
-    c_safe = margin * (hard_floor * capacity_wh + survival.wh) / capacity_wh
-    c_standby = margin * (c_safe * capacity_wh + downlink.wh) / capacity_wh
-    c_experiment = margin * (c_standby * capacity_wh
-                             + experiment.wh) / capacity_wh
 
     return EnergyBudget(
         margin=margin,
@@ -260,5 +234,4 @@ def budget(cfg: MissionConfig, env: EnvironmentResult,
         soc_safe=soc_safe,
         soc_standby=soc_standby,
         soc_experiment=soc_experiment,
-        compounded=(c_safe, c_standby, c_experiment),
     )

@@ -61,7 +61,8 @@ def main() -> int:
     parser.add_argument("--soc-margin", type=float, default=None,
                         metavar="FACTOR",
                         help="reserve on top of every worst-case mode-entry "
-                             "energy budget (default 1.20, i.e. 20 %% higher)")
+                             "energy budget, as a multiplier on each excursion's "
+                             "own cost (default 2.00, i.e. a 200 %% margin)")
     parser.add_argument("--vizard", metavar="GEOMETRY", nargs="?",
                         const="__best__", default=None,
                         help="export the CONOPS timeline for Vizard playback; "

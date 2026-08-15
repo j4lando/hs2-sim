@@ -55,20 +55,23 @@ through both panels at each terminator crossing, so a dip ties to it by eye.
   thing limiting the vehicle — a flat run at zero while the balance is well
   positive means the array is being shunted.
 
-**The charge panel** carries SOC in percent against the cell-protection floor
-(red dashed) and the mode-entry thresholds the run was scheduled on (grey
-dotted): safe entry, the level a downlink is affordable from, and the level a
-science block is affordable from. Those come from `hs2sim/energy.py`, which
-prices each activity plus the recovery from it at worst case in the dark, so
-the gaps between the lines *are* the excursions the vehicle can pay for. The
-floor and the thresholds stay in frame even when the vehicle never approaches
-them, because how much margin is being held is the point of the panel — except
-for a threshold above 100 %, which is unreachable by definition and would
-flatten the curve to no purpose; the legend still reports its value. Each
-orbit's minimum SOC is printed in its header rather than being left to be read
-off the curve.
+**The charge panel** carries SOC in percent against the mode-entry thresholds
+the run was scheduled on (grey dotted): safe entry, the level a downlink is
+affordable from, and the level a science block is affordable from. Those come
+from `hs2sim/energy.py`, which prices each activity plus the recovery from it
+at worst case in the dark, so the gaps between the lines *are* the excursions
+the vehicle can pay for. They stay in frame even when the vehicle never
+approaches them, because how much margin is being held is the point of the
+panel — except for a threshold above 100 %, which is unreachable by definition
+and would flatten the curve to no purpose; the legend still reports its value.
+Each orbit's minimum SOC is printed in its header rather than being left to be
+read off the curve.
+
+A red dashed **cell floor** appears only when a depth-of-discharge limit is
+configured. With none, there is no floor to draw and none is drawn: empty is
+not a limit, it is the failure.
 
 A pink **safe** band means the reserve ran out and the vehicle dropped to
-survival loads. SOC is never propped up at the floor, so a curve that goes
-through it is the model telling the truth about a deficit rather than hiding
-one; if it reaches zero the run is marked as a failed mission.
+survival loads. SOC is never propped up at a floor, so a curve that goes
+through one is the model telling the truth about a deficit rather than hiding
+it; if it reaches zero the run is marked as a failed mission.

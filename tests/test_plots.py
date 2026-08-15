@@ -90,16 +90,32 @@ def test_shared_ranges_span_every_geometry():
 
     # Both geometries' power balances sit inside the one range.
     assert ylim[0] < -10.0 and ylim[1] > 13.0
-    # And the charge range covers both, the floor, and full.
-    floor = timeline.floor_percent(cfg)
-    assert soc_ylim[0] < min(72.0, floor) and soc_ylim[1] > 99.0
+    # And the charge range covers both curves and full charge.
+    assert soc_ylim[0] < 72.0 and soc_ylim[1] > 99.0
 
 
-def test_charge_range_keeps_the_floor_in_frame():
+def test_a_configured_floor_stays_in_frame():
     """Even a timeline that never nears the floor must show it."""
-    cfg = MissionConfig()
+    cfg = MissionConfig().copy_with(
+        **{"spacecraft.battery.depth_of_discharge_limit": 0.5})
     env = orbit_env(64, 10.0, 5580.0)
     _, soc_ylim = timeline.shared_ranges(
         cfg, env, {"comfortable": flat_timeline(64, 20.0, 7.0, 0.995)})
-    assert soc_ylim[0] < timeline.floor_percent(cfg)
+    assert timeline.floor_percent(cfg) == 50.0
+    assert soc_ylim[0] < 50.0
     assert soc_ylim[1] > 100.0
+
+
+def test_no_floor_does_not_drag_the_range_down_to_empty():
+    """With the floor at zero there is nothing to keep in frame.
+
+    Stretching the axis to 0 % for a vehicle sitting near full would flatten
+    the curve the panel exists to show, and empty is not a limit anyway -- it
+    is the failure.
+    """
+    cfg = MissionConfig()
+    assert timeline.floor_percent(cfg) == 0.0
+    env = orbit_env(64, 10.0, 5580.0)
+    _, soc_ylim = timeline.shared_ranges(
+        cfg, env, {"comfortable": flat_timeline(64, 20.0, 7.0, 0.995)})
+    assert soc_ylim[0] > 50.0

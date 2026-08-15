@@ -84,7 +84,11 @@ def _series(cfg: MissionConfig, env: EnvironmentResult,
 
 
 def floor_percent(cfg: MissionConfig) -> float:
-    """SOC the scheduler is not allowed to discharge below."""
+    """SOC the scheduler is not allowed to discharge below.
+
+    Zero when no depth-of-discharge limit is configured, in which case there is
+    no floor to draw -- empty is not a limit, it is the failure.
+    """
     return (1.0 - float(cfg.spacecraft.battery.depth_of_discharge_limit)) * 100.0
 
 
@@ -131,7 +135,9 @@ def _soc_ylim(low: float, high: float, floor_pct: float,
     # set the range would stretch the axis to 200 % and flatten the curve that
     # the panel exists to show; the legend still reports its value.
     in_frame = [v for v in (thresholds or []) if 0.0 <= v <= 100.0]
-    low = min([low, floor_pct] + in_frame)
+    if floor_pct > 0.0:
+        in_frame.append(floor_pct)
+    low = min([low] + in_frame)
     high = max([high, 100.0] + in_frame)
     span = max(high - low, 1.0)
     return (low - 0.12 * span, high + 0.12 * span)
@@ -219,9 +225,10 @@ def battery_power(cfg: MissionConfig, env: EnvironmentResult,
                label="into battery (after losses and limits)"),
         # The charge curve itself needs no legend entry -- it is the only
         # series in its panel and the panel's axis label names it.
-        Line2D([], [], color=LIMIT_LINE, lw=1.0, ls="--",
-               label=f"cell floor ({floor_pct:.0f} % SOC)"),
     ]
+    if floor_pct > 0.0:
+        handles.append(Line2D([], [], color=LIMIT_LINE, lw=1.0, ls="--",
+                              label=f"cell floor ({floor_pct:.0f} % SOC)"))
     if entries:
         handles.append(
             Line2D([], [], color=INK_MUTED, lw=0.9, ls=(0, (1, 2)),
@@ -323,8 +330,9 @@ def battery_power(cfg: MissionConfig, env: EnvironmentResult,
                     lw=1.1, ls=(0, (4, 2)), zorder=3)
             ax.plot(minutes, net_w[start:stop], color=INK, lw=1.3, zorder=4)
 
-            ax_soc.axhline(floor_pct, color=LIMIT_LINE, ls="--", lw=1.0,
-                           zorder=2)
+            if floor_pct > 0.0:
+                ax_soc.axhline(floor_pct, color=LIMIT_LINE, ls="--", lw=1.0,
+                               zorder=2)
             for _, value in entries:
                 ax_soc.axhline(value, color=INK_MUTED, ls=(0, (1, 2)), lw=0.9,
                                zorder=2)

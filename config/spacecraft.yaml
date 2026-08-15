@@ -107,7 +107,11 @@ solar_array:
 
 battery:
   capacity_wh: 75.6            # [given]
-  depth_of_discharge_limit: 0.50   # [assumed] keep SOC above 50 %
+  # Fraction of the pack the scheduler is allowed to discharge, so the SOC
+  # floor is (1 - this). At 1.0 there is no cell-protection floor at all: the
+  # whole battery may be spent and the only hard limit is empty. Mode entry is
+  # then governed entirely by the worst-case energy budgets in hs2sim/energy.py.
+  depth_of_discharge_limit: 1.0
   round_trip_efficiency: 0.95      # [assumed]
   initial_soc: 0.90
 
@@ -315,11 +319,11 @@ conops:
   # scheduler does not chatter at the boundary.
   soc_resume_margin: 0.10        # [assumed]
   # Reserve carried on top of every worst-case energy budget that sets a mode
-  # entry threshold (see hs2sim/energy.py). Applied to each excursion's own
-  # cost, with the ladder stacked on the cell-protection floor. Overridable per
-  # run with --soc-margin.
-  # [assumed] 20 % on top of worst case.
-  soc_margin: 1.20
+  # entry threshold (see hs2sim/energy.py). A multiplier on each excursion's
+  # own cost -- it is never re-applied to the running total, so it does not
+  # compound up the ladder. Overridable per run with --soc-margin.
+  # [assumed] 200 %, i.e. twice the worst-case cost.
+  soc_margin: 2.00
   # Attitude change above this is treated as a real reorientation (costing a
   # magnetorquer-limited slew) rather than smooth target tracking. Repoints
   # this large do occur inside experiment mode when the sunlit-limb and Sun

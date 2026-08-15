@@ -100,7 +100,12 @@ def test_the_battery_is_not_propped_up_at_the_cell_floor():
     floor running loads it cannot power. Whether the scheduler respects the
     floor is a result, not an assumption.
     """
-    cfg = MissionConfig().copy_with(**{"spacecraft.battery.capacity_wh": 0.4})
+    # Configure a real floor for this one: the property under test is that a
+    # floor, when there is one, is never propped up. The shipped config has no
+    # floor, which would make the check vacuous.
+    cfg = MissionConfig().copy_with(**{
+        "spacecraft.battery.capacity_wh": 0.4,
+        "spacecraft.battery.depth_of_discharge_limit": 0.5})
     result = run_in_the_dark(cfg, dark_env())
     floor = 1.0 - float(cfg.spacecraft.battery.depth_of_discharge_limit)
     assert result.soc.min() < floor
