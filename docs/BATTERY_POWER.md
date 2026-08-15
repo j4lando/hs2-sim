@@ -31,6 +31,14 @@ can put any two modes next to each other. Slew is deliberately neutral: it is a
 transition between identities rather than one of its own, and it abuts every
 other mode. Safe takes the status-critical red.
 
+**Downlink contacts** additionally get a ▼ marker above the power panel. The
+downlink budget is enormously over-provisioned — the vehicle generates about
+1.7 MB/day against roughly 1000 MB/day of contact capacity — so a contact
+clears the backlog in seconds, and a truthful wash for one is a single sample:
+sub-pixel on a 90-minute axis, and easily read as "it never downlinked at
+all". The marker makes the contact findable; the wash still shows only how
+long it actually lasted.
+
 **Eclipse.** Its own track above the washes on the power panel, not a fourth
 background colour — light track is sunlit, dark is umbra (`shadow_factor <
 0.5`, the same test `environment.summarise` uses). A dotted hairline drops
