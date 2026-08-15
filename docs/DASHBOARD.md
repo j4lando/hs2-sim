@@ -14,9 +14,18 @@ all of them with a tooltip carrying every value at that moment.
 **Whole mission** at the top is one bar per orbit spanning its SOC range, with
 the current orbit highlighted. Click a bar to jump to it.
 
-**Stat tiles** for the selected orbit: minimum SOC, images collected,
-downlinked MB, eclipse minutes, the fraction of the orbit spent in experiment
-and in slew, and the on-board store at end of run.
+**Mission totals**, under it and independent of which orbit is selected:
+experiments and images for the whole run, frames reduced on board, frames
+purged, the reduction backlog still waiting at the end, and the peak the store
+reached. These are the run's headline numbers; everything below them is one
+orbit at a time.
+
+**Stat tiles** for the selected orbit: minimum SOC, images this orbit, images
+to date against the mission total, downlinked MB, eclipse minutes, and the
+fraction of the orbit spent in experiment and in slew.
+
+**Flight view** is the [Vizard](VIZARD.md) scene rebuilt in the page — see
+below.
 
 The charts, one measure each — no chart carries two y scales:
 
@@ -24,11 +33,15 @@ The charts, one measure each — no chart carries two y scales:
   the battery sees.
 - **State of charge (%)** — against the mode-entry thresholds the run was
   scheduled on, from `hs2sim/energy.py`.
-- **On-board image store (GB)** — images the payload has written and never
-  downlinked. The axis follows the data rather than the capacity line: the
-  store runs at a fraction of a percent of capacity, so including capacity in
-  the range would flatten the curve onto the axis. The note states both
-  figures, and the capacity line is drawn only when it is near the data.
+- **On-board image store (GB)** — three curves, not one: the total resident,
+  the part awaiting reduction, and the part reduced and awaiting its 48-hour
+  purge. Frames never leave over the link, so what governs this is the OBC's
+  reduction cadence against the capture rate — see [IMAGE_STORE.md](IMAGE_STORE.md).
+  The axis follows the data rather than the capacity line, because the store
+  runs at a fraction of a percent of capacity and including it would flatten
+  the curves onto the axis; the note states both figures and whether the
+  reduction backlog is growing, and the capacity line is drawn only when it is
+  near the data.
 - **Downlink backlog (MB)** — data queued for the next contact, and cumulative
   bytes sent.
 - **Achievable link rate (kbit/s)** — what the budget closes at the current
@@ -37,6 +50,38 @@ The charts, one measure each — no chart carries two y scales:
   every chart above, on the same encoding the PNG timeline uses.
 
 Eclipse is a shaded band behind every chart.
+
+## The flight view
+
+`hs2sim/output/globe.py`. The same scene `output/vizard.py` exports — Earth
+turning under the orbit, the terminator, the Leaf Space sites, the vehicle
+flying the attitude the scheduler chose — drawn into the page instead of into
+Vizard, so it sits next to the charts. Vizard proper is still the better tool
+and [VIZARD.md](VIZARD.md) still applies; this is the version that needs
+nothing installed.
+
+It is a hand-rolled orthographic projection onto a 2D canvas: no WebGL, no
+libraries, so the page stays one file that opens from disk. Orthographic on
+purpose — the orbit stays a true ellipse on screen, so what the eye measures
+off the picture is what the simulation computed.
+
+Drawn per frame: the body triad (**+x** FOUND, **+y**, **+z** LOST and star
+tracker), FOUND's line of sight out to where it meets the Earth, the link to
+whichever station is up, and the orbit track split into the part in front of
+the globe and the part behind it. The vehicle and the Sun marker are drawn
+either side of the Earth according to which side they are on, so the globe
+occludes them when it should.
+
+**Play** walks the orbit and rolls into the next one at the end; drag to orbit
+the camera, scroll to zoom, **Reset view** returns to a viewpoint derived from
+the orbit plane itself. Hovering any chart drives the scene to that instant, so
+the cursor and the picture always agree.
+
+The scene is sampled at 72 points per orbit rather than the charts' 220 —
+attitude is nine numbers a sample, and this is a view rather than a
+measurement. Positions, Sun directions and the planet rotation are shared
+across geometries because they are properties of the orbit; only the attitude
+differs.
 
 ## How the data gets there
 

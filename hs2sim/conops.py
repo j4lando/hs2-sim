@@ -46,7 +46,7 @@ import math
 
 import numpy as np
 
-from . import comms, energy, environment, power
+from . import comms, energy, environment, power, storage
 from .adcs import (TorqueAuthority, available_torque_about, dipole_vector,
                    eigenaxis_inertia, inertia_matrix, slew_time_eigenaxis)
 from .config import MissionConfig
@@ -100,6 +100,7 @@ class ConopsResult:
     failure_time_s: float = float("nan")   # when, or NaN if it never did
     unserved_wh: float = 0.0            # demand the empty battery could not meet
     budget: "energy.EnergyBudget | None" = None   # thresholds it was scheduled on
+    store: "storage.StorageResult | None" = None  # payload image store history
 
     def mode_fractions(self) -> dict[str, float]:
         total = len(self.mode)
@@ -377,8 +378,11 @@ def simulate(cfg: MissionConfig,
     array_efficiency = (float(array_settings.mppt_efficiency)
                         * float(array_settings.degradation))
 
+    store = storage.ImageStore(cfg, dt, n)
+
     for i in range(n):
         soc_now = level_wh / capacity_wh
+        capture_request = 0.0
         if soc_now < hard_floor:
             battery_limited = True
         # Safe mode latches: once the reserve is gone the vehicle stays on
@@ -419,7 +423,13 @@ def simulate(cfg: MissionConfig,
             target_mode = MODE_SAFE
         elif wants_downlink and soc_now >= soc_standby:
             target_mode = MODE_DOWNLINK
-        elif pointing.feasible[i] and soc_now >= soc_experiment:
+        elif (pointing.feasible[i] and soc_now >= soc_experiment
+                and store.has_room()):
+            # Pointing and power are not the only two ways to be unable to
+            # image. Frames are reduced at a fixed cadence and purged on a
+            # clock, so a capture rate above that cadence fills 128 GB of flash
+            # eventually -- and turning to the limb to write frames there is no
+            # room for would be worse than not turning at all.
             target_mode = MODE_EXPERIMENT
         else:
             target_mode = MODE_STANDBY
@@ -526,8 +536,7 @@ def simulate(cfg: MissionConfig,
             if current_mode == MODE_EXPERIMENT:
                 generation[i] = gen_experiment[i]
                 load[i] = loads["experiment"]
-                experiments[i] = effective_rate * dt
-                backlog += experiments[i] * per_experiment_bytes
+                capture_request = effective_rate * dt
             elif current_mode == MODE_DOWNLINK:
                 generation[i] = gen_downlink[i]
                 if link_bps[i] > 0.0:
@@ -548,6 +557,17 @@ def simulate(cfg: MissionConfig,
             else:
                 generation[i] = gen_standby[i]
                 load[i] = loads["standby"]
+
+        # The image store is stepped every sample, not only while imaging: the
+        # reduction pipeline works its queue off on its own cadence and the
+        # purge runs on a clock, both of which continue whether or not the
+        # payload is capturing. What comes back is how much of the requested
+        # imagery there was actually room for.
+        experiments[i] = store.offer(i, capture_request,
+                                     processing=mode[i] != MODE_SAFE)
+        # Only the 122-byte numerical product of an experiment is downlinked;
+        # the frames themselves stay on board. See `storage`.
+        backlog += experiments[i] * per_experiment_bytes
 
         # Housekeeping and the daily debug images join the queue continuously.
         backlog += (housekeeping_bps + debug_bytes_per_s) * dt
@@ -596,6 +616,7 @@ def simulate(cfg: MissionConfig,
         failure_time_s=failure_time_s,
         unserved_wh=unserved_wh,
         budget=budget,
+        store=store.result(),
     )
 
 
@@ -642,6 +663,9 @@ def summarise(cfg: MissionConfig, env: EnvironmentResult,
             if result.planned_slew_seconds.size else 0.0),
         "slews_unreachable": result.slew_unreachable,
         "slews_abandoned": result.slew_abandoned,
+        **({f"store_{k}": v
+            for k, v in result.store.summary(env).items()}
+           if result.store is not None else {}),
         "max_tracking_rate_dps": float(np.degrees(np.max(result.tracking_rate))),
         "mean_tracking_rate_dps": float(np.degrees(np.mean(result.tracking_rate))),
         **{f"frac_{name}": value for name, value in result.mode_fractions().items()},

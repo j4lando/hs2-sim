@@ -92,8 +92,15 @@ def main() -> int:
     if args.step is not None:
         cfg.mission.simulation.time_step_s = args.step
 
-    n_az = 24 if args.quick else 48
-    n_roll = 24 if args.quick else 48
+    # The attitude search grid has to be finer than the scheduler's
+    # intra-mode slew threshold, or the plan cannot follow the limb smoothly:
+    # its nearest legal neighbour is a whole grid step away, every step is
+    # therefore charged as a fresh manoeuvre, and the vehicle spends a
+    # 45-minute observing window slewing. At 96 azimuths the step is 3.8 deg,
+    # inside the 5 deg threshold. Going coarser costs images, not accuracy:
+    # feasibility itself moves by under a point between 24 and 144.
+    n_az = 48 if args.quick else 96
+    n_roll = 48 if args.quick else 96
     if args.exclusion_sweep is None:
         args.exclusion_sweep = not args.quick
 
@@ -263,6 +270,21 @@ def main() -> int:
                                  authority, baseline_rate, passes,
                                  budget=mode_budget)
         entry["conops_baseline"] = conops.summarise(cfg, env, result)
+        base = entry["conops_baseline"]
+        log(f"    experiment {base['frac_experiment']*100:.1f} % of the time "
+            f"(of {np.mean(pointing.feasible)*100:.1f} % legal), "
+            f"slew {base['frac_slew']*100:.1f} %, "
+            f"{base['images_per_day']:.0f} images/day")
+        if result.store is not None:
+            log(f"    store peak {base['store_stored_gb_peak']:.2f} GB of "
+                f"{base['store_capacity_gb']:.0f}, "
+                f"{base['store_images_processed']:.0f} frames reduced, "
+                f"{base['store_images_purged']:.0f} purged, backlog "
+                f"{base['store_processing_backlog_final']:.0f} "
+                f"({base['store_unprocessed_growth_images_per_day']:+.0f}/day)")
+            if base["store_images_dropped_store_full"] > 0:
+                log(f"    WARNING: {base['store_images_dropped_store_full']:.0f} "
+                    f"frames not taken -- the store filled")
 
         # Single-node thermal: internal dissipation follows the flown mode.
         heat_fractions = thermal.dissipation_fractions(

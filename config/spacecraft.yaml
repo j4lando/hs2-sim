@@ -259,6 +259,14 @@ payload:
   # Debug images actually downlinked per day: 1 LOST + 1 FOUND [given].
   debug_images_per_day: 2
   storage_gb: 128.0              # [given] payload storage
+  # On-board reduction. The OBC works through the store at one FOUND (Earth)
+  # frame and one LOST (star) frame every three minutes -- one experiment's
+  # worth of imagery per period, since an experiment is one frame from each
+  # [given].
+  processing_period_s: 180.0
+  # A frame is purged from the store this long after it has been processed
+  # [given]. Processing does not free the space; the delayed purge does.
+  processed_retention_h: 48.0
 
 # ---------------------------------------------------------------------------
 # Single-node (lumped) thermal model.

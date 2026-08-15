@@ -22,6 +22,7 @@ from .. import comms
 from ..config import MissionConfig
 from ..conops import MODE_NAMES, ConopsResult
 from ..environment import EnvironmentResult
+from . import globe
 from .style import MODE_WASH
 from .timeline import orbit_segments
 
@@ -52,12 +53,13 @@ def _resample(minutes: np.ndarray, values: np.ndarray,
 
 def _orbit_payload(cfg: MissionConfig, env: EnvironmentResult,
                    flown: ConopsResult, segments, grid: np.ndarray,
-                   stored_gb: np.ndarray, link_kbps: np.ndarray,
+                   store: dict[str, np.ndarray], link_kbps: np.ndarray,
                    access: np.ndarray, downlinked_mb: np.ndarray) -> list[dict]:
     dt = env.dt_s
     queue_mb = flown.queue_bytes / 1e6
     net_w = flown.generation_w - flown.load_w
     images = flown.experiments * int(cfg.payload.n_cameras)
+    cumulative_images = np.cumsum(images)
     eclipse = (env.shadow_factor < 0.5).astype(int)
 
     orbits = []
@@ -75,7 +77,9 @@ def _orbit_payload(cfg: MissionConfig, env: EnvironmentResult,
             "mode": _resample(minutes, flown.mode[span], grid, categorical=True),
             "eclipse": _resample(minutes, eclipse[span], grid, categorical=True),
             "queue": _resample(minutes, queue_mb[span], grid),
-            "stored": _resample(minutes, stored_gb[span], grid),
+            "stored": _resample(minutes, store["stored_gb"][span], grid),
+            "unproc": _resample(minutes, store["unprocessed_gb"][span], grid),
+            "proc": _resample(minutes, store["processed_gb"][span], grid),
             "sent": _resample(minutes, downlinked_mb[span], grid),
             "link": _resample(minutes, link_kbps[span], grid),
             "access": _resample(minutes, access[span], grid, categorical=True),
@@ -83,6 +87,9 @@ def _orbit_payload(cfg: MissionConfig, env: EnvironmentResult,
                 "min_soc": round(float(flown.soc[span].min() * 100.0), 1),
                 "max_soc": round(float(flown.soc[span].max() * 100.0), 1),
                 "images": int(round(float(images[span].sum()))),
+                # Mission-to-date, so scrubbing shows the total accumulating
+                # rather than only what this one orbit managed.
+                "images_to_date": int(round(float(cumulative_images[stop - 1]))),
                 "sent_mb": round(sent, 3),
                 "eclipse_min": round(float(eclipse[span].sum()) * dt / 60.0, 1),
                 "fractions": {
@@ -137,12 +144,25 @@ def build(cfg: MissionConfig, env: EnvironmentResult, results: dict,
     }
 
     for name, flown in timelines.items():
-        # On-board image store: what the payload has written and not sent. The
-        # model downlinks only numerical data and a couple of debug frames a
-        # day, so this is the number that actually fills the disk.
-        cumulative_images = np.cumsum(flown.experiments) * n_cameras
-        stored_gb = cumulative_images * image_bytes / 1e9
+        # The on-board image store, from the model in `storage`: frames are
+        # captured far faster than the OBC reduces them, and a reduced frame
+        # still occupies the disk until its retention runs out. So this is
+        # three curves, not a running total of everything ever taken.
+        st = flown.store
+        if st is not None:
+            store = {
+                "stored_gb": st.stored_bytes / 1e9,
+                "unprocessed_gb": st.unprocessed_images * st.image_bytes / 1e9,
+                "processed_gb": st.processed_images * st.image_bytes / 1e9,
+            }
+            store_stats = st.summary(env)
+        else:
+            zeros = np.zeros(env.n_samples)
+            store = {"stored_gb": zeros, "unprocessed_gb": zeros,
+                     "processed_gb": zeros}
+            store_stats = {}
         downlinked_mb = np.cumsum(flown.downlinked_bytes) / 1e6
+        total_images = float(np.sum(flown.experiments)) * n_cameras
 
         entry = results["geometries"].get(name, {})
         baseline = entry.get("conops_baseline", {})
@@ -158,6 +178,8 @@ def build(cfg: MissionConfig, env: EnvironmentResult, results: dict,
                     * 100.0, 2),
             },
             "summary": {
+                "images_total": int(round(total_images)),
+                "experiments_total": int(round(float(np.sum(flown.experiments)))),
                 "images_per_day": round(float(baseline.get("images_per_day", 0)), 0),
                 "downlinked_mb_per_day": round(
                     float(baseline.get("downlinked_mb_per_day", 0)), 2),
@@ -167,18 +189,40 @@ def build(cfg: MissionConfig, env: EnvironmentResult, results: dict,
                 "slews_per_day": round(float(baseline.get("slews_per_day", 0)), 0),
                 "slews_abandoned": int(baseline.get("slews_abandoned", 0)),
                 "mission_failed": bool(baseline.get("mission_failed", False)),
-                "final_storage_gb": round(float(stored_gb[-1]), 3),
+                "final_storage_gb": round(float(store["stored_gb"][-1]), 3),
+                "peak_storage_gb": round(float(np.max(store["stored_gb"])), 3),
+                "images_processed": int(round(
+                    store_stats.get("images_processed", 0.0))),
+                "images_purged": int(round(
+                    store_stats.get("images_purged", 0.0))),
+                "images_dropped": int(round(
+                    store_stats.get("images_dropped_store_full", 0.0))),
+                "backlog_final": int(round(
+                    store_stats.get("processing_backlog_final", 0.0))),
+                "backlog_growth_per_day": int(round(
+                    store_stats.get("unprocessed_growth_images_per_day", 0.0))),
             },
             "orbits": _orbit_payload(cfg, env, flown, segments, grid,
-                                     stored_gb, link_kbps, access,
-                                     downlinked_mb),
+                                     store, link_kbps, access, downlinked_mb),
         }
+
+    payload["meta"]["processing_period_s"] = float(
+        cfg.payload.processing_period_s)
+    payload["meta"]["retention_h"] = float(cfg.payload.processed_retention_h)
+    payload["meta"]["processing_images_per_day"] = round(
+        n_cameras * 86400.0 / float(cfg.payload.processing_period_s), 0)
+    payload["meta"]["image_mb"] = round(image_bytes / 1e6, 3)
+    payload["viz"] = globe.payload(cfg, env, timelines, segments, period_min)
 
     out_dir.mkdir(exist_ok=True)
     path = out_dir / "mission_dashboard.html"
-    html = _TEMPLATE.replace(
-        "/*__DATA__*/null",
-        json.dumps(payload, separators=(",", ":"), allow_nan=False))
+    html = (_TEMPLATE
+            .replace("/*__GLOBE_STYLE__*/", globe.STYLE)
+            .replace("<!--__GLOBE_MARKUP__-->", globe.MARKUP)
+            .replace("/*__GLOBE_SCRIPT__*/", globe.SCRIPT)
+            .replace("/*__DATA__*/null",
+                     json.dumps(payload, separators=(",", ":"),
+                                allow_nan=False)))
     path.write_text(html, encoding="utf-8")
     return path
 
@@ -260,6 +304,9 @@ footer{color:var(--muted);font-size:11px;padding:0 20px 30px;max-width:1180px;
   margin:0 auto}
 kbd{background:var(--plane);border:1px solid var(--axis);border-radius:4px;
   padding:0 4px;font:inherit;font-size:11px}
+.tile.total{background:linear-gradient(180deg,var(--panel),var(--plane))}
+.tile.total .v{font-size:22px}
+/*__GLOBE_STYLE__*/
 </style>
 </head>
 <body>
@@ -279,9 +326,12 @@ kbd{background:var(--plane);border:1px solid var(--axis);border-radius:4px;
 <main>
   <div class="overview"><div class="card">
     <h2>Whole mission</h2>
-    <div class="note">State of charge across every orbit. Click to jump.</div>
+    <div class="note" id="ovnote">State of charge across every orbit. Click to
+    jump.</div>
     <div id="overview"></div>
   </div></div>
+  <div class="tiles" id="totals"></div>
+  <!--__GLOBE_MARKUP__-->
   <div class="tiles" id="tiles"></div>
   <div id="charts"></div>
 </main>
@@ -315,7 +365,9 @@ const CHARTS = [
     +"thresholds this run was scheduled on.", series:[{k:"soc",label:"SOC",
     color:null,width:2}], thresholds:true, pad:6},
   {id:"storage", title:"On-board image store", unit:"GB", note:"", storage:true,
-   series:[{k:"stored",label:"stored",color:"#4a3aa7",width:2}]},
+   series:[{k:"stored",label:"stored (total)",color:"#4a3aa7",width:2},
+           {k:"unproc",label:"awaiting processing",color:"#eb6834"},
+           {k:"proc",label:"processed, awaiting purge",color:"#1baf7a"}]},
   {id:"queue", title:"Downlink backlog", unit:"MB", note:"Data queued for the "
     +"next contact, and what has been sent since epoch.",
    series:[{k:"queue",label:"queued",color:"#eb6834",width:2},
@@ -422,11 +474,23 @@ function xAxis(){
 }
 
 function storageNote(){
-  const used = G[geo].summary.final_storage_gb, cap = M.storage_gb;
-  return `Images written by the payload and never downlinked. At end of run `
-    + `${used.toFixed(2)} GB of ${cap} GB capacity is used `
-    + `(${(100 * used / cap).toFixed(2)} %), so the axis follows the data `
-    + `rather than the capacity line.`;
+  const s = G[geo].summary, cap = M.storage_gb;
+  const used = s.final_storage_gb;
+  return `Frames stay on board: only the 122-byte numerical product is `
+    + `downlinked. The OBC reduces one FOUND and one LOST frame every `
+    + `${(M.processing_period_s / 60).toFixed(0)} min `
+    + `(${M.processing_images_per_day.toLocaleString()} frames/day), and a `
+    + `reduced frame is purged ${M.retention_h.toFixed(0)} h later &mdash; so `
+    + `the store holds both populations at once. Peak `
+    + `${s.peak_storage_gb.toFixed(2)} GB of ${cap} GB `
+    + `(${(100 * s.peak_storage_gb / cap).toFixed(2)} %); the axis follows the `
+    + `data rather than the capacity line. Unprocessed backlog is `
+    + (s.backlog_growth_per_day > 0
+        ? `growing ${s.backlog_growth_per_day.toLocaleString()} frames/day.`
+        : `not growing.`)
+    + (s.images_dropped > 0
+        ? ` <b>${s.images_dropped.toLocaleString()} frames were not taken for `
+          + `want of room.</b>` : ``);
 }
 
 function chartSVG(o, spec){
@@ -474,6 +538,8 @@ function chartSVG(o, spec){
   </svg>`;
 }
 
+/*__GLOBE_SCRIPT__*/
+
 /* ------------------------------------------------------------- rendering - */
 function renderTabs(){
   document.getElementById("tabs").innerHTML = names.map(n =>
@@ -481,17 +547,36 @@ function renderTabs(){
       n}</button>`).join("");
 }
 
+function renderTotals(){
+  const s = G[geo].summary;
+  const tiles = [
+    ["Experiments, whole mission", s.experiments_total.toLocaleString(), "", 1],
+    ["Images, whole mission", s.images_total.toLocaleString(),
+     `${M.days.toFixed(1)} days`, 1],
+    ["Frames processed", s.images_processed.toLocaleString(), "on board", 0],
+    ["Frames purged", s.images_purged.toLocaleString(),
+     `after ${M.retention_h.toFixed(0)} h`, 0],
+    ["Awaiting processing", s.backlog_final.toLocaleString(),
+     "at end of run", 0],
+    ["Store peak", s.peak_storage_gb.toFixed(2) + " / " + M.storage_gb, "GB", 0],
+  ];
+  document.getElementById("totals").innerHTML = tiles.map(([k, v, u, big]) =>
+    `<div class="tile${big ? " total" : ""}"><div class="k">${k}</div>
+     <div class="v">${v} <span class="u">${u}</span></div></div>`).join("");
+}
+
 function renderTiles(){
   const o = G[geo].orbits[orbit - 1], s = o.stats, sum = G[geo].summary;
   const f = s.fractions, pct = v => (v * 100).toFixed(0) + "%";
   const tiles = [
     ["Min SOC this orbit", fmt(s.min_soc), "%"],
-    ["Images collected", s.images.toLocaleString(), ""],
+    ["Images this orbit", s.images.toLocaleString(), ""],
+    ["Images to date", s.images_to_date.toLocaleString(),
+     `of ${sum.images_total.toLocaleString()}`],
     ["Downlinked", fmt(s.sent_mb, 2), "MB"],
     ["Eclipse", fmt(s.eclipse_min), "min"],
     ["Experiment", pct(f.experiment), "of orbit"],
     ["Slew", pct(f.slew), "of orbit"],
-    ["Store used", fmt(sum.final_storage_gb, 2) + " / " + M.storage_gb, "GB end of run"],
   ];
   document.getElementById("tiles").innerHTML = tiles.map(([k, v, u]) =>
     `<div class="tile"><div class="k">${k}</div><div class="v">${v} <span class="u">${
@@ -572,7 +657,7 @@ function attachHover(){
   const move = e => {
     const svg = e.currentTarget, r = svg.getBoundingClientRect();
     const i = iAtX(((e.clientX - r.left) / r.width) * W);
-    cursor = i; drawCursor(all); showTip(e, i);
+    cursor = i; drawCursor(all); showTip(e, i); globeFollowCursor(i);
   };
   const leave = () => { cursor = null; drawCursor(all); tt.style.opacity = 0; };
   all.forEach(s => { s.onmousemove = move; s.onmouseleave = leave; });
@@ -619,11 +704,11 @@ function setOrbit(n){
   const o = G[geo].orbits[orbit - 1];
   document.getElementById("ocount").textContent =
     `orbit ${orbit} / ${max} · t+${o.t_start_h.toFixed(2)} h`;
-  renderTiles(); renderCharts(); renderOverview();
+  renderTiles(); renderCharts(); renderOverview(); renderGlobe();
 }
 
 function setGeo(n){
-  geo = n; renderTabs();
+  geo = n; renderTabs(); renderTotals();
   document.getElementById("slider").max = G[geo].orbits.length;
   setOrbit(Math.min(orbit, G[geo].orbits.length));
 }
@@ -645,7 +730,7 @@ document.getElementById("sub").textContent =
   + `${(M.eclipse_fraction * 100).toFixed(0)} % eclipse · `
   + `${M.passes_per_day} passes/day`;
 document.getElementById("slider").max = G[geo].orbits.length;
-renderTabs(); setOrbit(1);
+renderTabs(); renderTotals(); setOrbit(1);
 </script>
 </body>
 </html>

@@ -78,7 +78,14 @@ analysis:
     found_deg: [50, 60, 70, 80, 90]
     # The pointing search is re-run for every grid point, so it uses a coarser
     # azimuth/roll grid than the headline run. 32 gives ~11 deg resolution,
-    # which resolves feasibility fractions to well under a percent.
+    # which resolves feasibility fractions to well under a percent -- between
+    # 24 and 144 azimuths, feasibility moves by less than one point.
+    #
+    # Images per day is a different matter and does NOT survive the coarsening:
+    # a grid step wider than the scheduler's slew threshold turns every step
+    # along the limb into a charged manoeuvre, so the absolute image counts in
+    # this sweep run well below the headline run's. Read the sweep for the
+    # *shape* of the trade against exclusion angle, not for absolute yield.
     search_resolution: 32
     payload_rate_hz: 0.2
 

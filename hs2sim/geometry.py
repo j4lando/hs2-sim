@@ -77,6 +77,13 @@ class PointingResult:
     pointing_margin_deg: float = 0.0   # buffer the keep-outs were padded with
 
 
+# How long a candidate attitude has to stay legal to be worth turning to.
+# A constrained power optimum sits exactly on a keep-out boundary, so without
+# this the plan repeatedly commands minutes-long slews to attitudes that expire
+# on arrival. Converted to an angular slack at the orbital rate, since that is
+# what sweeps every one of these boundaries.
+DURABLE_HORIZON_S = 120.0
+
 REJECT_OK = 0
 REJECT_NO_SUNLIT_LIMB = 1     # the whole visible limb is in darkness
 REJECT_SUN_IN_FOUND = 2       # every sunlit limb violates FOUND's Sun keep-out
@@ -119,7 +126,8 @@ def solve_experiment_pointing(cfg: MissionConfig,
                               array_normals: np.ndarray | None = None,
                               array_weights: np.ndarray | None = None,
                               power_tolerance: float = 0.95,
-                              pointing_margin_deg: float | None = None
+                              pointing_margin_deg: float | None = None,
+                              hold_band_deg: float | None = None
                               ) -> PointingResult:
     """Find, for every sample, a legal experiment attitude (if one exists).
 
@@ -130,6 +138,17 @@ def solve_experiment_pointing(cfg: MissionConfig,
     ``array_normals`` (K,3) and ``array_weights`` (K,) describe the array in
     body coordinates; if omitted, feasibility is still computed and the power
     fraction is reported as zero.
+
+    Choosing among legal attitudes is not a tie-break here, it is most of what
+    decides how many images the mission gets: see the selector at the bottom of
+    this function. ``hold_band_deg`` is how far the planned attitude may move
+    between samples while still counting as *holding* it rather than repointing;
+    it defaults to the scheduler's own
+    ``conops.intra_mode_slew_threshold_deg``, so the plan and the thing pricing
+    it agree by construction. Note that the search grid has to be fine enough to
+    move in steps that small -- with ``n_azimuth`` coarser than the band, the
+    nearest legal neighbour is further away than a slew threshold and the plan
+    manufactures manoeuvres the vehicle would never fly.
 
     ``pointing_margin_deg`` pads every keep-out. The attitude this function
     returns is a *commanded* attitude; the true boresight sits somewhere within
@@ -166,6 +185,19 @@ def solve_experiment_pointing(cfg: MissionConfig,
     if pointing_margin_deg is None:
         pointing_margin_deg = _default_margin(cfg)
     margin = math.radians(float(pointing_margin_deg))
+
+    if hold_band_deg is None:
+        hold_band_deg = float(cfg.spacecraft.conops.intra_mode_slew_threshold_deg)
+    cos_hold_band = math.cos(math.radians(float(hold_band_deg)))
+
+    # Every keep-out here is driven by where the vehicle is and where the Sun
+    # is relative to it, so the boundaries sweep at the orbital rate and a
+    # candidate's angular slack converts to a survival time without a fitted
+    # constant. Taken from the state itself rather than a configured period.
+    orbit_rate = float(np.median(
+        np.linalg.norm(np.cross(env.r_BN_N, env.v_BN_N), axis=1)
+        / np.sum(env.r_BN_N ** 2, axis=1)))
+    min_slack = orbit_rate * DURABLE_HORIZON_S
 
     sun_excl_found = math.radians(float(found.sun_exclusion_deg)) + margin
 
@@ -215,12 +247,20 @@ def solve_experiment_pointing(cfg: MissionConfig,
     # margin so we are not imaging the terminator itself.
     surface_normal = unit(tangent)
     sun_from_tangent = unit(env.r_sun_N[:, None, :] - tangent)
-    lit = np.sum(surface_normal * sun_from_tangent, axis=-1) > math.sin(math.radians(5.0))
+    # Kept as an angle rather than a bare test so how *far* inside the
+    # constraint a candidate sits is available to the selector below.
+    lit_slack = np.arcsin(np.clip(
+        np.sum(surface_normal * sun_from_tangent, axis=-1), -1, 1)
+    ) - math.radians(5.0)
+    lit = lit_slack > 0.0
 
     # FOUND must keep the Sun outside its own exclusion half-cone.
     found_sun_angle = np.arccos(np.clip(
         np.sum(limb_dirs * sun_hat[:, None, :], axis=-1), -1, 1))
-    found_ok = lit & (found_sun_angle > sun_excl_found)
+    found_slack = found_sun_angle - sun_excl_found
+    found_ok = lit & (found_slack > 0.0)
+    # How much room a boresight has before either of its own constraints bites.
+    boresight_slack = np.minimum(lit_slack, found_slack)          # (N,A)
 
     # Roll about +x sweeps +z around a circle perpendicular to the boresight.
     rolls = np.linspace(0.0, 2 * math.pi, n_roll, endpoint=False)
@@ -252,6 +292,7 @@ def solve_experiment_pointing(cfg: MissionConfig,
 
     # Carried across chunks so continuity holds at chunk boundaries too.
     prev_x: np.ndarray | None = None
+    prev_y: np.ndarray | None = None
     prev_z: np.ndarray | None = None
 
     # Chunk over samples so the (M, A, R, 3) intermediates stay small enough to
@@ -279,8 +320,17 @@ def solve_experiment_pointing(cfg: MissionConfig,
         ok = (earth_angle > min_earth_c) & (sun_angle > sun_excl_z)
         ok &= found_ok[start:stop].reshape(-1, 1)
 
+        # Distance to the nearest constraint boundary, over all four cones.
+        # Every boundary here is driven by the orbit, so this converts to a
+        # survival time at the orbital rate -- how long this attitude can be
+        # held before it goes illegal and forces a repoint.
+        slack = np.minimum(earth_angle - min_earth_c, sun_angle - sun_excl_z)
+        slack = np.minimum(slack, boresight_slack[start:stop].reshape(-1, 1))
+        slack = np.where(ok, slack, 0.0).reshape(m, n_azimuth * n_roll)
+
+        y_all = np.cross(z_all, x_hat.reshape(-1, 1, 3))              # (M*A,R,3)
+
         if has_array:
-            y_all = np.cross(z_all, x_hat.reshape(-1, 1, 3))          # (M*A,R,3)
             # Body->inertial: a body vector n maps to n_x*x + n_y*y + n_z*z.
             normals_N = (array_normals[None, None, :, 0, None] * x_hat.reshape(-1, 1, 1, 3)
                          + array_normals[None, None, :, 1, None] * y_all[:, :, None, :]
@@ -292,35 +342,81 @@ def solve_experiment_pointing(cfg: MissionConfig,
 
         score = np.where(ok, score, -np.inf).reshape(m, n_azimuth * n_roll)
         x_grid = np.repeat(x_hat, n_roll, axis=1).reshape(m, n_azimuth * n_roll, 3)
+        y_grid = y_all.reshape(m, n_azimuth * n_roll, 3)
         z_grid = z_all.reshape(m, n_azimuth * n_roll, 3)
 
-        # Select sequentially so the attitude profile is temporally coherent.
-        # Optimising each sample independently produces a globally optimal but
-        # unflyable answer: consecutive samples can pick limb points on
-        # opposite sides of the Earth, implying an instantaneous 100 deg
-        # reorientation. Instead, among candidates within `power_tolerance` of
-        # the best available power, take the one closest to the attitude we are
-        # already holding. Feasibility -- the thing the reject codes report --
-        # is unaffected; only the choice among legal attitudes changes.
+        # Select sequentially. Array power decides, but only among attitudes
+        # the vehicle can actually be flying.
+        #
+        # Optimising each sample for instantaneous power alone is globally
+        # optimal and unflyable, in two separate ways. Consecutive samples pick
+        # limb points on opposite sides of the Earth, implying an instantaneous
+        # 100 deg reorientation -- and preferring the nearest of the
+        # *near-optimal* candidates does not fix it, because as the vehicle
+        # moves the power optimum itself crosses the Earth and the whole
+        # near-optimal set crosses with it. Less obviously, a constrained
+        # optimum sits *on* a constraint boundary, so the attitude picked for
+        # its power is the one about to go illegal. Either way the plan
+        # commands a repoint every couple of minutes, and since a
+        # magnetorquer-only 3U needs minutes to execute one, the vehicle spends
+        # a 45-minute window slewing and images almost none of it.
+        #
+        # So two filters, then power:
+        #
+        #   reachable  within ``hold_band`` of the attitude already planned, so
+        #              the scheduler charges the motion as a tracking rate
+        #              rather than as a fresh slew. This is what lets a long
+        #              feasible window be flown as one continuous observation.
+        #   durable    far enough inside every keep-out to still be legal a
+        #              minute from now, so the plan does not turn to an
+        #              attitude that expires on arrival.
+        #
+        # Neither filter is allowed to empty the candidate set: if nothing is
+        # both reachable and durable the requirement is dropped in that order,
+        # and a genuine repoint is planned -- to the best-powered durable
+        # attitude, nearest first among those within ``power_tolerance`` of it,
+        # so that a forced turn is at least a short one.
+        #
+        # Feasibility -- the thing the reject codes report -- is untouched by
+        # any of this: every candidate considered has already passed all four
+        # keep-out tests. Only the choice among legal attitudes changes.
         for local in range(m):
             row = score[local]
-            best_val = row.max()
-            if not np.isfinite(best_val):
+            legal = np.isfinite(row)
+            if not legal.any():
                 continue
             i = start + local
-            if best_val <= 0:
-                near_best = np.flatnonzero(np.isfinite(row))
-            else:
-                near_best = np.flatnonzero(row >= best_val * power_tolerance)
 
+            durable = legal & (slack[local] >= min_slack)
             if prev_x is None:
-                pick = near_best[int(np.argmax(row[near_best]))]
+                pool = durable if durable.any() else legal
+                pick = int(np.argmax(np.where(pool, row, -np.inf)))
             else:
-                alignment = (x_grid[local, near_best] @ prev_x
-                             + z_grid[local, near_best] @ prev_z)
-                pick = near_best[int(np.argmax(alignment))]
+                # Exact principal angle from the planned attitude: for two
+                # orthonormal triads the rotation between them has
+                # trace = x.x' + y.y' + z.z' = 1 + 2 cos(theta).
+                trace = (x_grid[local] @ prev_x + y_grid[local] @ prev_y
+                         + z_grid[local] @ prev_z)
+                cos_theta = np.clip((trace - 1.0) / 2.0, -1.0, 1.0)
+                reachable = cos_theta >= cos_hold_band
+
+                pool = durable & reachable
+                if not pool.any():
+                    pool = legal & reachable
+                if pool.any():
+                    pick = int(np.argmax(np.where(pool, row, -np.inf)))
+                else:
+                    pool = durable if durable.any() else legal
+                    best_val = np.where(pool, row, -np.inf).max()
+                    if best_val <= 0:
+                        near_best = np.flatnonzero(pool)
+                    else:
+                        near_best = np.flatnonzero(
+                            pool & (row >= best_val * power_tolerance))
+                    pick = int(near_best[int(np.argmax(cos_theta[near_best]))])
 
             chosen_x = x_grid[local, pick]
+            chosen_y = y_grid[local, pick]
             chosen_z = z_grid[local, pick]
             feasible[i] = True
             reject[i] = REJECT_OK
@@ -328,9 +424,8 @@ def solve_experiment_pointing(cfg: MissionConfig,
             best_z[i] = chosen_z
             best_roll[i] = rolls[pick % n_roll]
             best_power[i] = row[pick]
-            best_dcm[i] = np.vstack([chosen_x, np.cross(chosen_z, chosen_x),
-                                     chosen_z])
-            prev_x, prev_z = chosen_x, chosen_z
+            best_dcm[i] = np.vstack([chosen_x, chosen_y, chosen_z])
+            prev_x, prev_y, prev_z = chosen_x, chosen_y, chosen_z
 
     return PointingResult(
         feasible=feasible,

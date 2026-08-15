@@ -18,5 +18,6 @@ __all__ = [
     "geometry",
     "output",
     "power",
+    "storage",
     "thermal",
 ]
