@@ -265,7 +265,7 @@ def main() -> int:
 
         # Thermal uses the attitude actually flown, so run the scheduler first
         # at the baseline payload rate.
-        baseline_rate = 0.2
+        baseline_rate = float(cfg.mission.analysis.payload_rate_hz)
         result = conops.simulate(cfg, env, array, pointing, standby_dcm,
                                  authority, baseline_rate, passes,
                                  budget=mode_budget)

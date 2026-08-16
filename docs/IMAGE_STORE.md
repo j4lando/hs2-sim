@@ -56,11 +56,36 @@ straddles the moment the store fills is truncated rather than granted;
 `dropped_images` counts what was refused, and the run logs a warning if it is
 ever non-zero.
 
+The gate has hysteresis, for the same reason experiment mode's SOC gate does.
+A full store does not stay full: processed frames age out of retention and free
+a trickle of space. A gate that let the vehicle start observing on a trickle
+would have it turn to the limb, fill that space in seconds and turn back —
+paying two multi-minute slews for a fraction of a minute of imaging. Measured
+before the fix, at 0.5 Hz on geometry C, the median observation collapsed to
+**0.8 minutes** and slews rose to **82 a day**. So starting an observation
+requires room to sustain one for at least as long as the worst-case manoeuvre
+into it takes (`EnergyBudget.worst_slew_s`, from the same budget the SOC
+thresholds come from), while an observation already under way runs until the
+store is genuinely full.
+
 ## What to read off it
 
-The number that matters is not how full the disc is — on a run of a few days it
-is a fraction of a percent — but **whether the unprocessed population is
-growing**, which the chart's note states directly. A backlog growing at *N*
-frames a day divides 195,312 frames of capacity into the time before imaging
-has to stop. That is the constraint the reduction cadence really imposes, and
-it arrives long before the flash does.
+The number that matters is not how full the disc is at any instant but
+**whether the unprocessed population is growing**, which the chart's note states
+directly. A backlog growing at *N* frames a day divides 195,312 frames of
+capacity into the time before imaging has to stop.
+
+At the configured 0.5 Hz that is not a distant limit. Measured over 8 days:
+
+| | backlog growth | store after 8 days |
+|---|---|---|
+| A_2panel_90 | +640 frames/day | 4.8 GB |
+| B_3panel_90 | +15,460 frames/day | 82.3 GB |
+| C_2panel_135_plus_body | +24,000 frames/day | **full on day 7** |
+
+The reduction cadence gets through 960 frames a day. Geometry C captures
+between twenty and forty times that, so the 128 GB is not really 128 GB of
+margin — it is about a week of buffer, after which the mission is limited by
+how fast the OBC can reduce rather than by pointing or power. Lowering
+`analysis.payload_rate_hz`, raising the reduction cadence, or shortening the
+48-hour retention are the three levers, and the first is the only free one.

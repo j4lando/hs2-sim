@@ -20,7 +20,7 @@ import numpy as np
 
 from .. import comms
 from ..config import MissionConfig
-from ..conops import MODE_NAMES, ConopsResult
+from ..conops import MODE_EXPERIMENT, MODE_NAMES, ConopsResult
 from ..environment import EnvironmentResult
 from . import globe
 from .style import MODE_WASH
@@ -92,6 +92,12 @@ def _orbit_payload(cfg: MissionConfig, env: EnvironmentResult,
                 "images_to_date": int(round(float(cumulative_images[stop - 1]))),
                 "sent_mb": round(sent, 3),
                 "eclipse_min": round(float(eclipse[span].sum()) * dt / 60.0, 1),
+                # Straight off the mode history rather than a fraction times a
+                # nominal period: the orbits at either end of the run are
+                # partial, and their fraction would be of the wrong duration.
+                "experiment_min": round(
+                    float(np.sum(flown.mode[span] == MODE_EXPERIMENT))
+                    * dt / 60.0, 1),
                 "fractions": {
                     MODE_NAMES[code]: round(
                         float(np.mean(flown.mode[span] == code)), 4)
@@ -180,6 +186,16 @@ def build(cfg: MissionConfig, env: EnvironmentResult, results: dict,
             "summary": {
                 "images_total": int(round(total_images)),
                 "experiments_total": int(round(float(np.sum(flown.experiments)))),
+                # The payload cadence is a free parameter, so the counts scale
+                # with it and the time on target does not. Both are reported.
+                "experiment_hours": round(
+                    float(baseline.get("experiment_hours_total", 0.0)), 2),
+                "experiment_min_per_day": round(
+                    float(baseline.get("experiment_min_per_day", 0.0)), 0),
+                "experiment_block_median_min": round(
+                    float(baseline.get("experiment_block_median_min", 0.0)), 1),
+                "payload_rate_hz": float(
+                    cfg.mission.analysis.payload_rate_hz),
                 "images_per_day": round(float(baseline.get("images_per_day", 0)), 0),
                 "downlinked_mb_per_day": round(
                     float(baseline.get("downlinked_mb_per_day", 0)), 2),
@@ -550,9 +566,13 @@ function renderTabs(){
 function renderTotals(){
   const s = G[geo].summary;
   const tiles = [
-    ["Experiments, whole mission", s.experiments_total.toLocaleString(), "", 1],
+    ["Observing time, whole mission", s.experiment_hours.toFixed(1),
+     `h · ${s.experiment_min_per_day.toFixed(0)} min/day`, 1],
+    ["Experiments, whole mission", s.experiments_total.toLocaleString(),
+     `at ${s.payload_rate_hz} Hz`, 1],
     ["Images, whole mission", s.images_total.toLocaleString(),
      `${M.days.toFixed(1)} days`, 1],
+    ["Median observation", s.experiment_block_median_min.toFixed(1), "min", 0],
     ["Frames processed", s.images_processed.toLocaleString(), "on board", 0],
     ["Frames purged", s.images_purged.toLocaleString(),
      `after ${M.retention_h.toFixed(0)} h`, 0],
@@ -570,6 +590,7 @@ function renderTiles(){
   const f = s.fractions, pct = v => (v * 100).toFixed(0) + "%";
   const tiles = [
     ["Min SOC this orbit", fmt(s.min_soc), "%"],
+    ["Observing this orbit", fmt(s.experiment_min), "min"],
     ["Images this orbit", s.images.toLocaleString(), ""],
     ["Images to date", s.images_to_date.toLocaleString(),
      `of ${sum.images_total.toLocaleString()}`],

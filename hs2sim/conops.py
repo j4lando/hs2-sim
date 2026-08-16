@@ -14,14 +14,24 @@ Mode priority, highest first:
     SAFE      whenever stored energy has fallen to the survival reserve
     DOWNLINK  a contact is up or about to be, data is queued, and the battery
               can fund the whole contact and the recovery from it
-    EXPERIMENT the pointing constraints are satisfiable and the battery can
-              fund a whole science block and the recovery from it
+    EXPERIMENT the pointing constraints are satisfiable, there is room on the
+              image store, and the battery can fund a whole science block and
+              the recovery from it -- or, once observing, can still fund a
+              contact and the recovery from that
     STANDBY   otherwise (sun-pointing, charging)
 
 Every one of those energy tests is a threshold derived in `energy` from what
 the activity actually costs, worst case, in the dark -- not a number chosen in
 advance. An activity is never entered part-funded, so none has to be abandoned
 halfway for want of charge.
+
+Experiment mode has hysteresis, because starting a science block and
+continuing one are different decisions. Entry needs the whole worst-case block
+funded up front; staying only needs enough left to afford a contact and the
+recovery from it, which is the standby threshold. Without that gap the
+scheduler chatters on the entry level -- drop out, turn to the Sun, charge a
+few tenths of a percent, turn back -- and pays two multi-minute slews for a
+minute of imaging.
 
 The battery is integrated honestly: it is *not* held up at the
 depth-of-discharge limit. Clamping there would go on charging each mode's full
@@ -369,6 +379,10 @@ def simulate(cfg: MissionConfig,
 
     usb_fps = comms.usb2_max_fps(cfg)
     effective_rate = min(payload_rate_hz, usb_fps)
+    # Shortest observation worth turning for: no less than the worst-case
+    # manoeuvre into it. Taken from the same energy budget the SOC thresholds
+    # come from rather than picked, so it tracks the vehicle's real agility.
+    min_observation_s = float(budget.worst_slew_s)
 
     # Hoisted out of the loop: recomputing these per sample would make the
     # scheduler quadratic in the number of samples.
@@ -408,6 +422,36 @@ def simulate(cfg: MissionConfig,
         in_contact = station_index[i] >= 0 and link_bps[i] > 0
         wants_downlink = ((in_contact or committed[i] >= 0)
                           and backlog >= downlink_trigger)
+
+        # Starting a science block and continuing one are different decisions,
+        # so they get different thresholds. Entry needs the whole worst-case
+        # block funded in advance, as before. *Staying* only needs the vehicle
+        # to still be able to afford a contact and the recovery from it, which
+        # is precisely what the standby threshold is -- so an observation runs
+        # down to there rather than stopping the moment charge dips below the
+        # entry level.
+        #
+        # This is hysteresis, and without it the two levels being one worst-case
+        # science block apart is exactly what makes the boundary chatter: the
+        # vehicle drops out, turns to the Sun, charges a few tenths of a
+        # percent, turns back, and pays two multi-minute slews for a minute of
+        # imaging. Dropping out at the standby level is still safe by
+        # construction, because that level is the safe reserve *plus* a whole
+        # worst-case contact.
+        in_experiment = (current_mode == MODE_EXPERIMENT
+                         or (slewing and pending_mode == MODE_EXPERIMENT))
+        experiment_entry = soc_standby if in_experiment else soc_experiment
+        # Room on the image store gets the same enter-hard, exit-soft
+        # treatment, and for the same reason. Once the store is full it frees a
+        # trickle of space as processed frames age out of retention; a gate
+        # that let the vehicle start observing on a trickle would turn to the
+        # limb, fill it in seconds and turn back, for a fraction of a minute of
+        # imaging per manoeuvre. So starting requires room to sustain an
+        # observation at least as long as the turn into it costs -- and once
+        # observing, it runs until the store is genuinely full.
+        store_room = (store.room_images() > 0 if in_experiment
+                      else store.has_room_to_start(
+                          effective_rate * min_observation_s))
         if slewing and not in_safe:
             # A manoeuvre in progress is *committed*. Re-deciding the target
             # every sample is what let whole orbits disappear into SLEW: the
@@ -423,8 +467,7 @@ def simulate(cfg: MissionConfig,
             target_mode = MODE_SAFE
         elif wants_downlink and soc_now >= soc_standby:
             target_mode = MODE_DOWNLINK
-        elif (pointing.feasible[i] and soc_now >= soc_experiment
-                and store.has_room()):
+        elif pointing.feasible[i] and soc_now >= experiment_entry and store_room:
             # Pointing and power are not the only two ways to be unable to
             # image. Frames are reduced at a fixed cadence and purged on a
             # clock, so a capture rate above that cadence fills 128 GB of flash
@@ -620,14 +663,36 @@ def simulate(cfg: MissionConfig,
     )
 
 
+def _runs(mask: np.ndarray) -> np.ndarray:
+    """Lengths, in samples, of each contiguous True run in ``mask``."""
+    edges = np.diff(np.concatenate([[0], mask.astype(np.int8), [0]]))
+    return np.flatnonzero(edges == -1) - np.flatnonzero(edges == 1)
+
+
 def summarise(cfg: MissionConfig, env: EnvironmentResult,
               result: ConopsResult) -> dict[str, float]:
     days = env.duration_days
     images_per_experiment = int(cfg.payload.n_cameras)
     total_experiments = float(np.sum(result.experiments))
+    # Time on target, reported alongside the counts. The payload cadence is a
+    # free parameter, so the count scales with it and the duration does not:
+    # if the question is how much observing the CONOPS actually buys, this is
+    # the number that answers it, and images/day is that number times whatever
+    # rate the payload is run at.
+    experiment_s = float(np.sum(result.mode == MODE_EXPERIMENT)) * env.dt_s
+    blocks = _runs(result.mode == MODE_EXPERIMENT)
     return {
         "experiments_per_day": total_experiments / days,
         "images_per_day": total_experiments * images_per_experiment / days,
+        "experiments_total": total_experiments,
+        "images_total": total_experiments * images_per_experiment,
+        "experiment_hours_total": experiment_s / 3600.0,
+        "experiment_min_per_day": experiment_s / 60.0 / days,
+        "experiment_blocks_per_day": len(blocks) / days,
+        "experiment_block_median_min": (
+            float(np.median(blocks)) * env.dt_s / 60.0 if blocks.size else 0.0),
+        "experiment_block_max_min": (
+            float(np.max(blocks)) * env.dt_s / 60.0 if blocks.size else 0.0),
         "downlinked_mb_per_day": float(np.sum(result.downlinked_bytes) / 1e6 / days),
         "final_queue_mb": float(result.queue_bytes[-1] / 1e6),
         # Net growth of the downlink backlog. A positive number means data is

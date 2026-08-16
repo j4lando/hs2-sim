@@ -52,8 +52,16 @@ vizard:
   station_active_marker_scale: 4.0
 
 analysis:
-  # Payload cadence candidates (experiments per second). The budget assumed
-  # 0.2 Hz; the user asked for this to be a free parameter.
+  # Payload cadence for the headline run, experiments per second. Each
+  # experiment is one FOUND frame and one LOST frame, so this is also half the
+  # frame rate. Well under the 13.7 Hz the shared USB 2.0 bus allows, but far
+  # above the on-board reduction cadence of one experiment per 3 minutes -- so
+  # at this rate the store fills with unprocessed frames rather than the
+  # payload being throughput-limited. See docs/IMAGE_STORE.md.
+  payload_rate_hz: 0.5
+
+  # Payload cadence candidates for the rate sweep (experiments per second).
+  # The budget assumed 0.2 Hz; the user asked for this to be a free parameter.
   payload_rate_hz_sweep: [0.02, 0.05, 0.1, 0.2, 0.5, 1.0]
 
   # Exclusion-angle trade. Both cameras' keep-out cones are swept to see what
@@ -87,7 +95,7 @@ analysis:
     # this sweep run well below the headline run's. Read the sweep for the
     # *shape* of the trade against exclusion angle, not for absolute yield.
     search_resolution: 32
-    payload_rate_hz: 0.2
+    payload_rate_hz: 0.5
 
     # Pointing-error buffer, in degrees, that every keep-out is enforced with.
     # This is an ADCS performance number rather than a payload requirement, but

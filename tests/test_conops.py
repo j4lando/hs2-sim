@@ -5,6 +5,7 @@ from __future__ import annotations
 import math
 
 import numpy as np
+import pytest
 
 from helpers import orbit_env
 from hs2sim import comms, conops
@@ -236,3 +237,121 @@ def test_abandoned_slews_are_counted_in_the_summary():
     result = run_with_pass(MissionConfig(), env, np.zeros(200, bool))
     summary = conops.summarise(MissionConfig(), env, result)
     assert summary["slews_abandoned"] == result.slew_abandoned
+
+
+def observing_env(array=None, n=1200, dt=10.0, period=5580.0):
+    """Sunlit, no stations, and a legal experiment attitude at every sample.
+
+    Nothing here can stop the payload except the battery, which is what makes
+    it a test of the entry and exit thresholds rather than of the geometry.
+    Pass ``array`` to hold the sun-pointing attitude throughout, which makes the
+    run power-positive; leave it out for a fixed attitude that discharges.
+    """
+    from hs2sim import geometry
+    env = orbit_env(n, dt, period)
+    env.shadow_factor[:] = 1.0
+    ang = 2 * np.pi * env.t_s / period
+    env.b_field_N = 3.5e-5 * np.stack(
+        [np.cos(ang), np.sin(ang), 0.3 * np.ones_like(ang)], axis=1)
+    if array is None:
+        dcm = np.tile(np.eye(3), (n, 1, 1))
+    else:
+        dcm, _ = geometry.sun_pointing_attitude(env, array.normals,
+                                                array.peak_w)
+    pointing = geometry.PointingResult(
+        feasible=np.ones(n, bool), dcm_BN=dcm.copy(),
+        x_axis_N=np.tile([1.0, 0, 0], (n, 1)),
+        z_axis_N=np.tile([0, 0, 1.0], (n, 1)),
+        roll_used=np.zeros(n), array_power_frac=np.zeros(n),
+        reject_reason=np.zeros(n, int))
+    return env, dcm, pointing
+
+
+def test_an_observation_runs_on_below_the_level_it_could_have_started_at():
+    """Entry and exit are different decisions, so they get different levels.
+
+    Starting a science block needs the whole worst-case block funded up front.
+    Staying in one only needs enough left to afford a contact and the recovery
+    from it -- the standby threshold. Without the gap the scheduler stops the
+    moment charge dips below the entry level, then chatters there, paying two
+    multi-minute slews for a minute of imaging.
+    """
+    import dataclasses
+
+    from hs2sim import adcs, energy, power
+    cfg = MissionConfig()
+    env, standby, pointing = observing_env()          # discharging throughout
+    array = power.all_array_geometries(cfg)[2]
+    authority = adcs.torque_authority(cfg, env)
+    budget = energy.budget(cfg, env, authority, [])
+    result = conops.simulate(cfg, env, array, pointing, standby, authority,
+                             0.2, [], budget=budget)
+
+    observing = result.mode == conops.MODE_EXPERIMENT
+    assert observing.any(), "the fixture never observed at all"
+    low = float(result.soc[observing].min())
+
+    # It kept imaging well below the level it would have needed to begin.
+    assert low < budget.soc_experiment
+
+    # But not below the level that still funds a contact and the recovery from
+    # it -- that is what makes the hysteresis safe rather than just convenient.
+    # One sample's discharge of slack, since the level is tested at the top of
+    # a step and the step still runs at the observing load.
+    one_step = (float(np.max(result.load_w)) * env.dt_s / 3600.0
+                / float(cfg.spacecraft.battery.capacity_wh))
+    assert low >= budget.soc_standby - one_step
+
+    # And the band is doing the work: collapse it and the run stops early.
+    flat = dataclasses.replace(budget, soc_standby=budget.soc_experiment)
+    without = conops.simulate(cfg, env, array, pointing, standby, authority,
+                              0.2, [], budget=flat)
+    assert (np.sum(without.mode == conops.MODE_EXPERIMENT)
+            < np.sum(observing)), "the exit threshold changed nothing"
+
+
+def test_the_hysteresis_band_costs_nothing_when_charge_never_approaches_it():
+    """A vehicle that stays well clear of the entry level flies identically."""
+    from hs2sim import adcs, energy, power
+    cfg = MissionConfig()
+    array = power.all_array_geometries(cfg)[2]
+    env, standby, pointing = observing_env(array)
+    authority = adcs.torque_authority(cfg, env)
+    budget = energy.budget(cfg, env, authority, [])
+    result = conops.simulate(cfg, env, array, pointing, standby, authority,
+                             0.2, [], budget=budget)
+    assert result.soc.min() > budget.soc_experiment, \
+        "this fixture is meant to stay clear of the threshold"
+    # Then the exit level is never consulted, and every sample is observing.
+    assert np.all(result.mode[1:] == conops.MODE_EXPERIMENT)
+
+
+def test_time_on_target_is_reported_beside_the_counts():
+    """The payload cadence is a free parameter; the duration is not.
+
+    Doubling the rate must double the images and leave the observing time
+    essentially alone, which is the whole reason both are reported.
+    """
+    from hs2sim import adcs, energy, power
+    cfg = MissionConfig()
+    array = power.all_array_geometries(cfg)[2]
+    env, standby, pointing = observing_env(array)
+    authority = adcs.torque_authority(cfg, env)
+    budget = energy.budget(cfg, env, authority, [])
+
+    slow = conops.summarise(cfg, env, conops.simulate(
+        cfg, env, array, pointing, standby, authority, 0.1, [], budget=budget))
+    fast = conops.summarise(cfg, env, conops.simulate(
+        cfg, env, array, pointing, standby, authority, 0.2, [], budget=budget))
+
+    assert slow["experiment_hours_total"] > 0
+    assert fast["experiments_total"] == pytest.approx(
+        2 * slow["experiments_total"], rel=1e-6)
+    assert fast["experiment_hours_total"] == pytest.approx(
+        slow["experiment_hours_total"], rel=1e-6)
+    # And the duration is the mode history, not a count divided by a rate.
+    dt = env.dt_s
+    expected = float(np.sum(
+        conops.simulate(cfg, env, array, pointing, standby, authority, 0.2,
+                        [], budget=budget).mode == conops.MODE_EXPERIMENT)) * dt
+    assert fast["experiment_hours_total"] == pytest.approx(expected / 3600.0)

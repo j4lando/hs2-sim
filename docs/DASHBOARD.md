@@ -15,14 +15,15 @@ all of them with a tooltip carrying every value at that moment.
 the current orbit highlighted. Click a bar to jump to it.
 
 **Mission totals**, under it and independent of which orbit is selected:
-experiments and images for the whole run, frames reduced on board, frames
+observing time for the whole run and per day, experiments and images for the
+whole run, the median observation length, frames reduced on board, frames
 purged, the reduction backlog still waiting at the end, and the peak the store
-reached. These are the run's headline numbers; everything below them is one
-orbit at a time.
+reached. Time and counts are both there because the payload cadence is a free
+parameter — the counts scale with it and the observing time does not.
 
-**Stat tiles** for the selected orbit: minimum SOC, images this orbit, images
-to date against the mission total, downlinked MB, eclipse minutes, and the
-fraction of the orbit spent in experiment and in slew.
+**Stat tiles** for the selected orbit: minimum SOC, observing minutes, images
+this orbit, images to date against the mission total, downlinked MB, eclipse
+minutes, and the fraction of the orbit spent in experiment and in slew.
 
 **Flight view** is the [Vizard](VIZARD.md) scene rebuilt in the page — see
 below.

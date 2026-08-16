@@ -111,9 +111,27 @@ class ImageStore:
     def room_images(self) -> float:
         return max(0.0, self.capacity_images - self._unprocessed - self._processed)
 
-    def has_room(self) -> bool:
-        """Is there space for at least one more experiment's worth of frames?"""
-        return self.room_images() >= self.per_experiment
+    def has_room(self, experiments: float = 1.0) -> bool:
+        """Is there space for ``experiments`` more experiments' worth of frames?"""
+        return self.room_images() >= experiments * self.per_experiment
+
+    def has_room_to_start(self, experiments: float) -> bool:
+        """Room to sustain an observation of ``experiments``, within reason.
+
+        A nearly-full store frees a trickle of space as processed frames age
+        out of retention. A gate that only asked for one frame's worth would
+        let the vehicle turn to the limb, fill that trickle in seconds and turn
+        back -- two multi-minute slews for a fraction of a minute of imaging.
+        So starting asks for enough room to be worth the manoeuvre.
+
+        Capped at half the store, because the requirement is a policy about
+        chatter and must not become a policy about never imaging at all: on a
+        vehicle whose flash holds less than one observation, demanding a whole
+        one would refuse every capture the mission ever tried to make.
+        """
+        capacity_experiments = self.capacity_images / self.per_experiment
+        want = min(float(experiments), 0.5 * capacity_experiments)
+        return self.has_room(max(1.0, want))
 
     def offer(self, i: int, experiments: float, processing: bool = True) -> float:
         """Take up to ``experiments`` experiments' worth of frames at step ``i``.

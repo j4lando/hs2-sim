@@ -153,3 +153,55 @@ def test_only_the_numerical_product_is_queued_for_downlink():
     image_share = experiments * int(cfg.payload.n_cameras) * comms.image_bytes(cfg)
     assert flown.queue_bytes[-1] < image_share * 0.01, \
         "imagery leaked into the downlink queue"
+
+
+def test_a_nearly_full_store_will_not_start_an_observation_on_a_trickle():
+    """The room gate needs hysteresis for the same reason the SOC gate does.
+
+    A full store does not stay full: processed frames age out of retention and
+    free a little space. Starting an observation on that means turning to the
+    limb, filling it in seconds and turning back -- two multi-minute slews for
+    a fraction of a minute of imaging. Measured before this gate existed, at
+    0.5 Hz on the best geometry, the median observation was 0.8 minutes and the
+    vehicle slewed 82 times a day.
+    """
+    cfg = MissionConfig().copy_with(**{"payload.storage_gb": 1.0})
+    dt = 60.0
+    retention_s = float(cfg.payload.processed_retention_h) * 3600.0
+    n = int(retention_s / dt) + 60
+    store = a_store(cfg, n, dt)
+
+    # Fill it, then let it sit so the earliest frames age out and free a
+    # trickle -- exactly the state the gate exists for.
+    i = 0
+    while store.has_room() and i < n:
+        store.offer(i, 1000.0)
+        i += 1
+    filled_at = i
+    assert filled_at < n, "the store never filled"
+    for j in range(filled_at, n):
+        store.offer(j, 0.0)
+
+    freed = store.room_images()
+    assert freed > 0, "retention never freed anything"
+    # There is room for a frame...
+    assert store.has_room(1.0)
+    # ...but not enough to be worth turning the spacecraft for.
+    wanted = freed / int(cfg.payload.n_cameras) * 4.0
+    assert not store.has_room_to_start(wanted)
+
+
+def test_the_start_gate_never_demands_more_than_the_store_holds():
+    """The rule is about chatter, not about refusing to image at all.
+
+    On a vehicle whose flash holds less than one observation, asking for a
+    whole one would decline every capture the mission ever tried to make.
+    """
+    cfg = MissionConfig().copy_with(**{"payload.storage_gb": 0.01})
+    store = a_store(cfg, 10, 60.0)
+    capacity_experiments = store.capacity_images / store.per_experiment
+    # An empty store must accept a request far larger than it could ever hold.
+    assert store.has_room_to_start(1e6)
+    # And once genuinely full it must not.
+    store.offer(0, capacity_experiments * 2)
+    assert not store.has_room_to_start(1e6)

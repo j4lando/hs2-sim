@@ -90,9 +90,41 @@ The two effects are independent; isolated at a 30 s step:
 | grid 96, old selector | 912 | 4,181 | 7,051 |
 | grid 96, new selector | 413 | 4,078 | **11,338** |
 
+## Entering and leaving an observation are different decisions
+
+A third thing was ending observations early: the SOC test was the same on the
+way in and the way out. Starting a science block needs the whole worst-case
+block funded up front — that is what the 84 % entry threshold is for — but
+*staying* in one only needs enough charge left to afford a contact and the
+recovery from it, which is exactly what the 54 % standby threshold already
+means. With one level doing both jobs the scheduler chattered on it: drop out,
+turn to the Sun, charge a few tenths of a percent, turn back, and pay two
+multi-minute slews for a minute of imaging.
+
+Experiment mode now enters at the experiment threshold and leaves at the
+standby one. Isolated at 0.2 Hz over 3 days:
+
+| | without hysteresis | with hysteresis |
+|---|---|---|
+| A_2panel_90 | 1.8 %, 612 img/day, 33 slews/day | 1.7 %, 602, 30 |
+| B_3panel_90 | 15.1 %, 5,234 img/day, 75 slews/day | **20.0 %, 6,922, 59** |
+| C_2panel_135_plus_body | 41.1 %, 14,194 img/day, 49 slews/day | 41.1 %, 14,194, 49 |
+
+It helps precisely the geometry that was chattering. B's mean SOC sits right on
+the entry level, so B was crossing it constantly — it gains 32 % more images and
+sheds a fifth of its slews. C never approaches the level, so the band is never
+consulted and C is unchanged to the digit; A is gated on *entry*, spending most
+of its time below the threshold, so hysteresis cannot help it. Dropping out at
+the standby level is safe by construction, because that level is the safe
+reserve plus a whole worst-case contact.
+
+The image store gate needed the same treatment, for the same reason — see
+[IMAGE_STORE.md](IMAGE_STORE.md).
+
 ## Result
 
-At the production 15 s step, images per day:
+At the production 15 s step and the 0.2 Hz the rate sweep was built around,
+images per day:
 
 | | before | after |
 |---|---|---|
@@ -104,6 +136,18 @@ C now flies 41.5 % of the mission in experiment mode against a 50.6 % ceiling �
 **82 % of the available pointing opportunity** — with slew down from 33 % to
 12 % of the time and 45 slews a day instead of 118. It beats B by 2.4×, which is
 the ordering its array power implies.
+
+The configured cadence is now **0.5 Hz** (`analysis.payload_rate_hz`), where the
+same 3-day run gives A 1,950, B 16,305 and C 33,695 images a day. Observing time
+barely moves with the rate — C goes 41.1 % to 39.0 %, the payload drawing a
+little more — which is why the summary now reports **time on target beside the
+counts**: `experiment_hours_total`, `experiment_min_per_day`, and the median and
+longest observation. The counts scale with whatever cadence the payload is run
+at; the duration is what the CONOPS actually buys.
+
+At 0.5 Hz the binding constraint stops being pointing or power and becomes the
+on-board reduction cadence: C fills its 128 GB of flash on about day 7. That is
+in [IMAGE_STORE.md](IMAGE_STORE.md).
 
 ## Why the daily count used to swing so wildly
 
