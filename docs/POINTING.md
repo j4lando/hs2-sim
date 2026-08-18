@@ -121,6 +121,46 @@ reserve plus a whole worst-case contact.
 The image store gate needed the same treatment, for the same reason — see
 [IMAGE_STORE.md](IMAGE_STORE.md).
 
+## Three gates that delete a manoeuvre rather than shorten it
+
+Every remaining slew was censused by what it was for and how long its
+destination was then held. One pattern accounted for nearly all the waste:
+**manoeuvres whose destination did not outlast the manoeuvre.** Repoints inside
+a science window turned for 5.7 min and then held the new attitude for 1.0 min;
+repoints for a contact turned for 3.2 min and held for 0.2 min. Every one of
+them was pure loss.
+
+Three gates, all of them cheap, all of them reading quantities the ephemeris
+already knows:
+
+1. **Do not turn for a contact that does not need turning for.** The link
+   closes edge-on by 16.8 dB, so the repoint buys rate the mission has no use
+   for — see [LINK_BUDGET.md](LINK_BUDGET.md). This deleted every comms
+   manoeuvre.
+2. **Do not begin a manoeuvre whose reason expires before it ends.** After
+   pricing the slew against the real field, the scheduler asks how long the
+   destination stays valid at the arrival time; if that is less than the turn
+   itself, it declines and holds sun-pointing instead. For a contact, validity
+   is how long the pass still needs pointing. For science it is *not* simply
+   whether a legal attitude exists — feasibility can hold for a whole 45-minute
+   window while the planned attitude inside it jumps every couple of minutes —
+   so the window is cut wherever the plan itself steps by more than a tracking
+   rate. What is left is how long that particular attitude survives.
+3. **Reaching the entry level arms science for the rest of the orbit** (below).
+
+Declined manoeuvres are counted as `slews_skipped`, so the gate cannot hide how
+often it fires. The overrun guard that abandons a diverging slew is still
+there behind it: the gate refuses what is foreseeably hopeless, the guard
+catches what only reveals itself once under way, and both are tested.
+
+Effect on the `expt->expt` churn, over 3 days:
+
+| | before the gates | after |
+|---|---|---|
+| A_2panel_90 | 8 repoints, 42.5 min turning, held 0.8 min each | 1 |
+| B_3panel_90 | 24 repoints, 131 min turning, held 1.0 min each | 3 |
+| C_2panel_135_plus_body | 2 | 1 |
+
 ## Result
 
 At the production 15 s step and the 0.2 Hz the rate sweep was built around,
@@ -148,6 +188,49 @@ at; the duration is what the CONOPS actually buys.
 At 0.5 Hz the binding constraint stops being pointing or power and becomes the
 on-board reduction cadence: C fills its 128 GB of flash on about day 7. That is
 in [IMAGE_STORE.md](IMAGE_STORE.md).
+
+### With all the gates in, at 0.5 Hz over 3 days
+
+| geometry | peak W | observing | median block | images/day | slews/day | mean SOC |
+|---|---|---|---|---|---|---|
+| A_2panel_90 | 14.8 | 8.9 % | 22.8 min | 7,730 | 15 | 80.2 % |
+| B_3panel_90 | 22.0 | 26.9 % | 26.8 min | 23,245 | 40 | 86.7 % |
+| **C_2panel_135_plus_body** | 22.3 | **43.3 %** | 28.2 min | **37,420** | 37 | 97.6 % |
+| D_2panel_135_minus_x | 14.8 | 1.0 % | 12.2 min | 895 | 2 | 41.2 % |
+| E_2panel_135_no_body | 14.8 | 16.5 % | 27.5 min | 14,260 | 21 | 81.1 % |
+
+The median observation is now 23–28 minutes against a 46-minute window, where
+it started at 2.5–4 minutes. C converts 85 % of the pointing opportunity it
+shares with every other geometry.
+
+## What the two extra geometries show
+
+**D — two panels at 135° off the -x face, as a symmetric V.** The worst of the
+five by a wide margin: mean SOC 41 %, below the 36 % safe threshold at its
+minimum, and under a thousand images a day. Modelled honestly as two panels on
+*different* normals — a real dihedral is not one flat surface — the V can never
+put both panels at full cosine at once, so its effective peak is
+2 x 7.4 x cos 45° = 10.5 W against A's 14.8 W from a single flat wing. A
+dihedral buys tolerance to Sun direction, and a vehicle that can point at the
+Sun has no use for tolerance to Sun direction. It would be the right shape for
+a spinner or a vehicle with no attitude control, and it is the wrong shape for
+this one.
+
+**E — geometry C's wing without the body-mounted panel.** 14,260 images a day
+against C's 37,420, so the 7.5 W body panel — a third more peak power — is
+worth **2.6x the science**. That is the SOC entry threshold amplifying a modest
+power difference into a large one, the same non-linearity that makes A and B so
+sensitive.
+
+E is also the cleanest available measurement of something else. A and E are the
+same panel: one flat 14.8 W surface, differing only in which way it faces on
+the body. In standby that is invisible, because the vehicle turns to face the
+Sun either way. In *experiment* mode it is not, because the attitude is pinned
+by the cameras: A's normal is -x, exactly opposite FOUND's boresight, so
+whenever FOUND is on the limb the array is pointed as far from useful as it can
+be. E's normal sits 45° off, and gets **nearly twice the images from the same
+panel**. Where the array sits relative to the payload boresight is worth about
+as much as adding a third panel.
 
 ## Why the daily count used to swing so wildly
 

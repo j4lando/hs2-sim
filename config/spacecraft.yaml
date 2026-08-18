@@ -98,6 +98,29 @@ solar_array_options:
       - {name: deployable, normal: [-0.70710678, 0.70710678, 0.0], peak_w: 14.8, deployable: true, count: 2}
       - {name: body_plus_y, normal: [0.0, 1.0, 0.0], peak_w: 7.5, deployable: false, count: 1}
 
+  D_2panel_135_minus_x:
+    description: >
+      2-panel deployable on the -x face at a 135 deg dihedral, so the two
+      panels form a symmetric V about -x with each normal 45 deg off it. Unlike
+      C, the wing is NOT modelled as one flat surface: a real 135 deg dihedral
+      puts the two panels on different normals, which is the whole point of the
+      configuration -- it widens the range of Sun directions that illuminate
+      something, at the cost of never having both panels at full cosine at
+      once. Per-panel power 7.4 W, the same 14.8/2 split C uses.
+    peak_total_w: 14.8
+    panels:
+      - {name: deployable_plus_y, normal: [-0.70710678, 0.70710678, 0.0], peak_w: 7.4, deployable: true, count: 1}
+      - {name: deployable_minus_y, normal: [-0.70710678, -0.70710678, 0.0], peak_w: 7.4, deployable: true, count: 1}
+
+  E_2panel_135_no_body:
+    description: >
+      Geometry C's deployable wing with the body-mounted +y panel removed, to
+      price what that 7.5 W panel is actually worth. Identical pointing, 2.5 W
+      less peak, and no body panel to shadow or to constrain the layout.
+    peak_total_w: 14.8
+    panels:
+      - {name: deployable, normal: [-0.70710678, 0.70710678, 0.0], peak_w: 14.8, deployable: true, count: 2}
+
 solar_array:
   # Cell/MPPT behaviour applied on top of the cosine law.
   # peak_w is already an end-of-string number, so only pointing and eclipse
