@@ -233,7 +233,7 @@ def propagate_cases(cfg: MissionConfig, n_cases: int, duration_s: float,
         raan = 360.0 * index / n_cases
         case_cfg = cfg.copy_with(**{
             "orbit.raan_deg": raan,
-            "simulation.duration_days": duration_days,
+            "mission.simulation.duration_days": duration_days,
         })
         if log is not None:
             log(f"  propagating RAAN {raan:6.1f} deg "
