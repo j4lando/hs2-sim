@@ -100,17 +100,22 @@ solar_array_options:
 
   D_2panel_135_minus_x:
     description: >
-      2-panel deployable on the -x face at a 135 deg dihedral, so the two
-      panels form a symmetric V about -x with each normal 45 deg off it. Unlike
-      C, the wing is NOT modelled as one flat surface: a real 135 deg dihedral
-      puts the two panels on different normals, which is the whole point of the
-      configuration -- it widens the range of Sun directions that illuminate
-      something, at the cost of never having both panels at full cosine at
-      once. Per-panel power 7.4 W, the same 14.8/2 split C uses.
+      A single deployable wing on the -x face, hinged down its centerline so
+      its 2 panels open to a 135 deg dihedral between them (not one flat
+      surface). It is one mechanism -- one deployment motor/hinge -- not two
+      independent deployables; the panel split below is only because each
+      half of the folded wing has its own normal. With a 135 deg interior
+      angle between the panels, the angle between their normals is
+      180 - 135 = 45 deg, split symmetrically about -x so each panel normal
+      sits 22.5 deg off it: n = Rz(+-22.5) * (-1,0,0)
+      = (-cos22.5, -+sin22.5, 0) = (-0.92388, -+0.38268, 0). This widens the
+      range of Sun directions that illuminate something, at the cost of never
+      having both panels at full cosine at once. Per-panel power 7.4 W, the
+      same 14.8/2 split C uses.
     peak_total_w: 14.8
     panels:
-      - {name: deployable_plus_y, normal: [-0.70710678, 0.70710678, 0.0], peak_w: 7.4, deployable: true, count: 1}
-      - {name: deployable_minus_y, normal: [-0.70710678, -0.70710678, 0.0], peak_w: 7.4, deployable: true, count: 1}
+      - {name: deployable_panel_a, normal: [-0.92387953, 0.38268343, 0.0], peak_w: 7.4, deployable: true, count: 1}
+      - {name: deployable_panel_b, normal: [-0.92387953, -0.38268343, 0.0], peak_w: 7.4, deployable: true, count: 1}
 
   E_2panel_135_no_body:
     description: >
