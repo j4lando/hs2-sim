@@ -1,0 +1,321 @@
+# HS-2 detumble / sun-acquisition simulation inputs.
+#
+# This file is used only by `hs2sim.detumble` and `run_detumble.py`. It is
+# separate from the CONOPS analysis: nothing here feeds the scheduler, and the
+# CONOPS run does not read it.
+#
+# Tags:  [given] stated by the user, [datasheet] from a vendor datasheet,
+#        [derived] computed from a datasheet number, [assumed] our assumption.
+
+# ---------------------------------------------------------------------------
+# Sun sensors: Silonex SLCD-61N8 solderable planar photodiode.
+#
+# From the datasheet (104118 REV 0):
+#   Sensitive area              2.7 mm^2
+#   I_SC                        100 min / 170 typ  uA  at Ee = 25 mW/cm^2
+#                               from a 2854 K source
+#   Acceptance half angle       60 deg
+#   Reverse dark current        1.7 uA max at V_R = 5 V
+#   Spectral range              400 - 1100 nm, peak 930 nm, 0.55 A/W at 940 nm
+#
+# ANGULAR RESPONSE.  The datasheet's "Directional Sensitivity Characteristics"
+# polar plot is quoted with a 60 deg half angle, i.e. the response is down to
+# 0.5 at 60 deg off boresight.  cos(60 deg) = 0.5 exactly, so the part is a
+# plain cosine (Lambertian) receiver over its useful range, which is what a
+# flat unpackaged planar photodiode should be.  We therefore model
+#
+#     I(theta) = I_sun * max(0, cos theta)
+#
+# with a hard zero past 90 deg because the diode is mounted flush on a body
+# face and the structure occults anything behind the face plane.  No lens,
+# no baffle, no aperture correction -- if the flight part gets a cover glass
+# or a recessed aperture this law is the first thing to re-measure.
+#
+# SOLAR SCALING.  The datasheet stimulus is a 2854 K tungsten lamp, not the
+# Sun.  Incident power on the die at 25 mW/cm^2 is
+#     250 W/m^2 * 2.7e-6 m^2 = 675 uW,
+# so the effective responsivity to that source is 170 uA / 675 uW = 0.252 A/W
+# -- far below the 0.55 A/W quoted at 940 nm, because a 2854 K blackbody puts
+# most of its energy past 1100 nm where silicon is blind.  AM0 sunlight is
+# bluer, and the same integration over the AM0 spectrum lands within about
+# 10 % of the same effective responsivity.  We therefore scale I_SC linearly
+# with irradiance and carry `solar_spectral_factor` as the knob that absorbs
+# the mismatch; 1.0 means "AM0 behaves like the datasheet lamp per W/m^2".
+sun_sensor:
+  part_number: "SLCD-61N8"          # [datasheet]
+  isc_typ_a: 170.0e-6               # [datasheet] at 25 mW/cm^2, 2854 K
+  isc_min_a: 100.0e-6               # [datasheet] same conditions
+  reference_irradiance_w_m2: 250.0  # [datasheet] 25 mW/cm^2
+  solar_spectral_factor: 1.0        # [assumed] see note above
+  dark_current_a: 1.7e-6            # [datasheet] max, V_R = 5 V
+  # Zero-bias (photovoltaic) operation into a transimpedance amp: the 1.7 uA
+  # figure is a reverse-bias maximum, so using it directly is conservative.
+  # It enters as a fixed offset plus a shot-noise-like random term.
+  dark_current_tempco_per_c: 0.10   # [assumed] Si dark current roughly
+                                    # doubles every 8-10 C
+  temperature_c: 20.0               # [assumed] sunlit body panel
+  acceptance_half_angle_deg: 60.0   # [datasheet] response = 0.5 here
+  # Signal chain. Full scale is sized just above the typical AM0 short circuit
+  # current (170 uA * 1361/250 = 926 uA) so a normal-incidence Sun does not
+  # clip.
+  adc_bits: 12                      # [assumed] typical CubeSat ADC
+  adc_full_scale_a: 1.10e-3         # [assumed] ~19 % headroom on 926 uA
+  # Below this fraction of the expected normal-incidence current a channel is
+  # treated as dark and dropped from the solve. 0.02 of full scale is 22 uA,
+  # comfortably above the 1.7 uA dark current, and corresponds to about
+  # 88.6 deg incidence -- so the cut throws away only grazing readings whose
+  # cosine is dominated by noise.
+  valid_fraction: 0.02              # [assumed]
+
+# ---------------------------------------------------------------------------
+# The three sun sensor geometries under trade [given].
+#
+# Boresights are body-frame unit vectors. Body frame is the one used
+# everywhere else in this repo: +z along the 3U long axis, +x/+y normal to the
+# 10 x 30 cm long faces.
+# ---------------------------------------------------------------------------
+sensor_geometries:
+
+  four_side_faces:
+    description: >
+      One sensor on each of the four long faces, pointing outwards. Nothing on
+      either z end face.
+    boresights:
+      - [ 1.0,  0.0, 0.0]
+      - [-1.0,  0.0, 0.0]
+      - [ 0.0,  1.0, 0.0]
+      - [ 0.0, -1.0, 0.0]
+
+  canted_y_pair:
+    description: >
+      Four sensors, all with boresights in the body xy plane: the +y and -y
+      faces plus a pair canted 45 deg off them. Same count as the four-face
+      set but the normals are bunched into two antipodal pairs 45 deg apart
+      instead of being spread 90 deg apart.
+    boresights:
+      - [ 0.0,  1.0, 0.0]
+      - [ 0.0, -1.0, 0.0]
+      - [-0.70710678,  0.70710678, 0.0]
+      - [ 0.70710678, -0.70710678, 0.0]
+
+  six_faces:
+    description: >
+      One sensor on every face pointing outwards, including both z end faces.
+      The only set of the three whose normals span all three body axes.
+    boresights:
+      - [ 1.0,  0.0,  0.0]
+      - [-1.0,  0.0,  0.0]
+      - [ 0.0,  1.0,  0.0]
+      - [ 0.0, -1.0,  0.0]
+      - [ 0.0,  0.0,  1.0]
+      - [ 0.0,  0.0, -1.0]
+
+# ---------------------------------------------------------------------------
+# IMU.
+#
+# The spacecraft power budget lists a single `imu` line item at 0.22 W. A part
+# in that class is a 9-DOF MEMS module (gyro + accelerometer + magnetometer),
+# and the magnetometer is REQUIRED here: every magnetic control law needs the
+# local field vector, and there is no other field sensor on the vehicle. This
+# is the single biggest assumption in the whole detumble analysis -- if the
+# flown IMU is gyro-only, none of the control laws below can be flown as
+# written. See docs/DETUMBLE.md.
+#
+# Noise numbers are representative of a tactical-grade-adjacent MEMS part
+# (think ADIS16470 / BMI088 class) rather than any specific datasheet.
+# ---------------------------------------------------------------------------
+imu:
+  gyro:
+    angle_random_walk_deg_per_sqrt_hr: 0.15   # [assumed]
+    bias_stability_deg_per_hr: 8.0            # [assumed] in-run stability
+    turn_on_bias_deg_per_hr: 60.0             # [assumed] 1-sigma, redrawn
+                                              # each Monte Carlo trial
+    scale_factor_error: 0.005                 # [assumed] 1-sigma
+    misalignment_deg: 0.5                     # [assumed] 1-sigma per axis
+    range_deg_per_s: 500.0                    # [assumed] saturation
+    resolution_deg_per_s: 0.0153              # [assumed] 16-bit over +-500
+  magnetometer:
+    noise_nt: 300.0                # [assumed] 1-sigma per axis, per sample
+    turn_on_bias_nt: 800.0         # [assumed] 1-sigma, redrawn each trial.
+                                   # Dominated by the hard-iron field of the
+                                   # bus, not by the part itself.
+    scale_factor_error: 0.02       # [assumed] 1-sigma
+    misalignment_deg: 1.0          # [assumed] 1-sigma per axis
+    range_nt: 100000.0             # [assumed] saturation, +-1 gauss
+
+# ---------------------------------------------------------------------------
+# Magnetorquers and the measure/actuate cycle.
+#
+# Dipoles come from config/spacecraft.yaml (0.2 A m^2 on each of x, y, z).
+# What is added here is the error model and, more importantly, the DUTY CYCLE.
+#
+# The magnetometer sits inside the same 3U as the coils. A 0.2 A m^2 dipole at
+# 10 cm produces of order 40 uT at the sensor -- comparable to the whole Earth
+# field -- so the field cannot be measured while the coils are energised. Real
+# CubeSats interleave: coils off, settle, sample, coils on. That costs
+# authority, and the cost is modelled rather than assumed away.
+# ---------------------------------------------------------------------------
+magnetorquer:
+  scale_factor_error: 0.05       # [assumed] 1-sigma, per axis
+  misalignment_deg: 1.0          # [assumed] 1-sigma, per axis
+  # Control cycle: coils are off for `measure_window_s` at the top of every
+  # `control_period_s`, then hold the commanded dipole for the rest.
+  control_period_s: 1.0          # [assumed]
+  measure_window_s: 0.25         # [assumed] coil current decay + settle +
+                                 # sample; duty = 75 %
+
+# ---------------------------------------------------------------------------
+# Control laws. See docs/DETUMBLE.md for the derivations.
+#
+# Both modes build a DESIRED torque and then ask the coils for the dipole that
+# comes closest to it:
+#     m = (B x tau_desired) / |B|^2
+# The torque that actually results is tau = m x B, which is tau_desired with
+# its component along B removed. Nothing anywhere in this simulation applies a
+# torque that is not the cross product of a realisable dipole with the true
+# local field.
+# ---------------------------------------------------------------------------
+control:
+  # -- B-cross rate damping (detumble mode) --------------------------------
+  #
+  #     tau_desired = -k_detumble * omega_measured
+  #
+  # Sizing: with |B| ~ 3e-5 T the coils saturate (|m| = 0.2 A m^2) once
+  # |tau_desired| > 0.2 * 3e-5 = 6e-6 N m, i.e. once |omega| > k/6e-6. At
+  # k = 1.0e-4 N m s that is 0.06 rad/s = 3.4 deg/s, so the controller is
+  # bang-bang through the whole high-rate phase and becomes linear only in the
+  # last few deg/s -- which is where linear behaviour actually matters.
+  k_detumble_nms: 1.0e-4          # [assumed]
+
+  # -- Sun acquisition ------------------------------------------------------
+  #
+  #     tau_desired = k_p (n_array x s_measured) - k_d omega_measured
+  #
+  # `n_array` is the body-frame axis that wants to face the Sun (below), and
+  # the cross product is the standard two-axis error: its magnitude is the
+  # sine of the pointing error and it vanishes at both 0 and 180 deg, so the
+  # -k_d term is what breaks the unstable equilibrium at 180 deg.
+  #
+  # These two were SWEPT rather than sized, because the textbook sizing is
+  # wrong here in an instructive way. The second-order reading -- pick a
+  # bandwidth, then damp it near critically -- gives k_p = 2e-6 N m (a 90 deg
+  # error demanding about the torque the vehicle can deliver) and zeta = 0.7,
+  # and that combination is one of the WORST in the sweep. It is derived from
+  # a fully actuated plant, and this one is not: only the part of the demand
+  # perpendicular to B is ever delivered, so the damping term spends authority
+  # fighting a rotation the proportional term is struggling to produce in the
+  # first place.
+  #
+  # Sweeping k_p over 6e-6 .. 2e-4 and zeta over 0.10 .. 2.0, scoring on
+  # median array output over the final orbit:
+  #
+  #     k_p      zeta    capture   sun error   dipole used
+  #     6e-6     0.50      0.584      54.0        0.13
+  #     2e-5     0.15      0.695      44.0        0.28
+  #     2e-5     0.25      0.669      44.7        0.22   <- flown
+  #     2e-5     0.50      0.612      51.7        0.19
+  #     6e-5     0.25      0.673      45.2        0.30
+  #     2e-4     0.50      0.613      51.4        0.37
+  #
+  # k_p = 2e-5 and zeta = 0.25. Capture is flat from 2e-5 to 6e-5, so the
+  # lower one is taken because it draws a third less coil power for the same
+  # pointing. zeta = 0.15 edges the median up but its 10th percentile drops
+  # from 0.50 to 0.40 -- it wins on the good trials and loses on the bad ones,
+  # which is the wrong way round for an acquisition mode.
+  k_p_sun_nm: 2.0e-5              # [swept]
+  k_d_sun_nms: 5.0e-4             # [swept] = 2 * 0.25 * sqrt(k_p * 0.05)
+
+  # -- Mode logic -----------------------------------------------------------
+  # Hysteresis on the measured rate. Enter sun acquisition below `enter`,
+  # fall back to detumble above `exit`.
+  sun_mode_enter_deg_per_s: 0.5   # [assumed]
+  sun_mode_exit_deg_per_s: 2.0    # [assumed]
+  # The rate has to stay below `enter` for this long before the mode changes,
+  # so a momentary dip during a tumble does not trip it.
+  sun_mode_dwell_s: 60.0          # [assumed]
+
+  # Which body axis is driven at the Sun. `array` uses the power-weighted mean
+  # of the selected solar array option's panel normals, which is the axis that
+  # maximises first-order array output; any explicit 3-vector is also accepted.
+  sun_target_axis: array
+
+# ---------------------------------------------------------------------------
+# Environment.
+#
+# There is no orbit, magnetic field or eclipse model in this analysis. All of
+# it comes from `hs2sim.environment.propagate`, the same Basilisk propagation
+# the CONOPS study runs on: J2 gravity from the bundled GGM03S zonals, the
+# centred dipole field, Basilisk's eclipse module and the planetEphemeris Sun.
+# What is configured here is only how that propagation is DISPERSED across the
+# Monte Carlo, and the two sensor-facing effects Basilisk does not provide.
+# ---------------------------------------------------------------------------
+environment:
+  # How many Basilisk propagations to run, at evenly spaced RAANs. RAAN is
+  # what moves the beta angle, and beta sets both the eclipse fraction (no sun
+  # sensor signal at all) and how the Sun sits relative to the orbit plane.
+  # Sweeping it evenly means a modest number of cases still spans the range.
+  # Each case is a full Basilisk run, so this is the main cost knob.
+  n_raan_cases: 8                 # [assumed]
+  # Each case is propagated for the trial duration plus this much slack, and
+  # every trial picks a random start time inside the slack. One orbit of slack
+  # gives a uniform spread of starting orbit phase and eclipse timing.
+  start_spread_s: 5570.0          # [assumed] one orbit
+  # Earth albedo contamination of the sun sensors. Basilisk's eclipse module
+  # gives direct sunlight only; reflected light off Earth is a sensor-facing
+  # effect and is added on top. It is on by default because it is the dominant
+  # coarse-sun-sensor error in LEO: a nadir-facing photodiode at 415 km over a
+  # fully sunlit sub-satellite point sees roughly
+  # a * S * sin^2(rho) = 0.3 * 1361 * 0.88 = 360 W/m^2, a quarter of the
+  # direct solar signal, arriving from a completely different direction.
+  albedo:
+    enabled: true
+    reflectivity: 0.30            # [assumed] global mean, matches mission.yaml
+  # Disturbance torques added to the truth dynamics. Basilisk supplies the
+  # position, velocity and field they are computed from; the torques
+  # themselves are formed here because they depend on the attitude, which is
+  # what this simulation owns.
+  disturbances:
+    gravity_gradient: true
+    residual_dipole: true
+    aerodynamic: true
+    atmospheric_density_kg_m3: 3.0e-12   # [assumed] 415 km, moderate activity
+
+# ---------------------------------------------------------------------------
+# Monte Carlo setup.
+# ---------------------------------------------------------------------------
+monte_carlo:
+  trials: 200                     # [assumed]
+  seed: 20270320                  # reproducibility
+  # 8 h, about 5.2 orbits. Sized from the answer rather than guessed: the
+  # median trial acquires the Sun around 95 min in, and the steady-state
+  # metrics below average over the final orbit, so anything under about
+  # 3.2 h would be scoring the acquisition transient instead of the result.
+  duration_s: 28800.0
+  # Truth integration step (RK4). Must divide both the control period and the
+  # measurement window, so 0.25 s gives four substeps per 1 s control cycle,
+  # the first of which is the coils-off measurement window.
+  time_step_s: 0.25
+  sample_step_s: 10.0             # history downsampling for plots
+  # Initial body rate: a random axis, magnitude uniform over this range. The
+  # CONOPS config assumes 10 deg/s post-deployment; the range brackets it and
+  # covers a bad separation-system tip-off.
+  initial_rate_deg_per_s: [2.0, 20.0]
+  # Initial attitude is uniform over SO(3) (Shoemake's method). Orbit-plane
+  # and epoch dispersion come from the environment cases above, not from here.
+  # Which solar array option (from spacecraft.yaml) the sun target axis and
+  # the power capture metric refer to.
+  array_option: C_2panel_135_plus_body
+
+# ---------------------------------------------------------------------------
+# Success criteria used to reduce each trial to pass/fail numbers.
+# ---------------------------------------------------------------------------
+metrics:
+  # Detumbled when the TRUE rate first drops below this and stays below it.
+  detumble_threshold_deg_per_s: 1.0
+  detumble_hold_s: 300.0
+  # Sun acquired when the instantaneous power capture fraction first reaches
+  # this and holds, counting sunlit time only.
+  power_capture_threshold: 0.80
+  power_capture_hold_s: 300.0
+  # Steady-state statistics are taken over the last this many seconds.
+  steady_state_window_s: 5570.0   # one orbit

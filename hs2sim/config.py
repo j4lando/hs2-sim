@@ -57,6 +57,11 @@ class MissionConfig:
         self.mission = load_yaml(config_dir / "mission.yaml")
         self.spacecraft = load_yaml(config_dir / "spacecraft.yaml")
         self.ground = load_yaml(config_dir / "ground_stations.yaml")
+        # Detumble/sun-acquisition inputs. Optional: the CONOPS analysis never
+        # touches them, so an installation without the file still runs.
+        detumble_path = config_dir / "detumble.yaml"
+        self.detumble = (load_yaml(detumble_path) if detumble_path.exists()
+                         else None)
 
     # -- convenient shortcuts -------------------------------------------------
     @property
@@ -87,6 +92,13 @@ class MissionConfig:
         """Yield (option_name, option_config) for each solar array geometry."""
         for name, option in self.spacecraft.solar_array_options.items():
             yield name, option
+
+    def sensor_geometries(self) -> Iterator[tuple[str, AttrDict]]:
+        """Yield (name, geometry) for each sun sensor layout under trade."""
+        if self.detumble is None:
+            return
+        for name, geometry in self.detumble.sensor_geometries.items():
+            yield name, geometry
 
     def stations(self) -> list[AttrDict]:
         """Ground stations with defaults filled in."""
