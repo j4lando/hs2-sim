@@ -106,6 +106,7 @@ class ConopsResult:
     slew_abandoned: int                # manoeuvres given up as unconvergeable
     battery_limited: bool               # SOC went below the cell-protection floor
     # Defaulted so a hand-built result (tests, fixtures) stays constructible.
+    slew_skipped: int = 0               # manoeuvres declined: destination too short
     mission_failed: bool = False        # SOC reached zero: the bus browned out
     failure_time_s: float = float("nan")   # when, or NaN if it never did
     unserved_wh: float = 0.0            # demand the empty battery could not meet
@@ -221,10 +222,32 @@ def downlink_attitude(env: EnvironmentResult,
     return dcm
 
 
+def remaining_seconds(mask: np.ndarray, dt: float) -> np.ndarray:
+    """(N,) seconds the run of True containing each sample still has to run.
+
+    Zero where the mask is False. Used to ask "will the reason for this
+    manoeuvre still be there when the manoeuvre finishes", which is knowable
+    from the ephemeris in advance -- both pointing feasibility and station
+    access are, which is what makes the question scheduling rather than
+    clairvoyance.
+    """
+    m = np.asarray(mask, dtype=bool)
+    n = m.size
+    index = np.arange(n)
+    next_false = np.where(~m, index, n)
+    next_false = np.minimum.accumulate(next_false[::-1])[::-1]
+    return (next_false - index) * float(dt)
+
+
 def downlink_commitment(env: EnvironmentResult,
                         passes: list[comms.Pass],
-                        lead_s: float) -> np.ndarray:
+                        lead_s: float,
+                        unpointed_bps: np.ndarray | None = None) -> np.ndarray:
     """(N,) station to be pointed at per sample, or -1.
+
+    A pass whose link already closes with the patch edge-on is left
+    uncommitted: pointing the vehicle at it buys rate the mission has no use
+    for and costs a manoeuvre at each end. See ``unpointed_bps``.
 
     A contact is committed to ``lead_s`` before the station rises rather than
     at AOS. The repoint from the standby attitude to the downlink attitude is
@@ -243,6 +266,15 @@ def downlink_commitment(env: EnvironmentResult,
     for contact in sorted(passes, key=lambda p: p.start_s):
         if contact.bytes_capacity <= 0:
             continue        # link never closes; not worth pointing at
+        if unpointed_bps is not None:
+            # Would this contact carry anything at all without repointing? If
+            # so the repoint is buying rate, not a link, and the vehicle has
+            # more contact capacity than it can fill either way -- so do not
+            # commit to it and do not pay the two slews.
+            lo = int(np.searchsorted(env.t_s, contact.start_s, "left"))
+            hi = int(np.searchsorted(env.t_s, contact.end_s, "left"))
+            if np.any(unpointed_bps[lo:hi] > 0.0):
+                continue
         first = int(np.searchsorted(env.t_s, contact.start_s - lead_s, "left"))
         # A sample stamped t covers [t, t+dt), so one starting exactly at LOS
         # is already past the pass.
@@ -275,6 +307,23 @@ def simulate(cfg: MissionConfig,
 
     station_pos_N = environment.station_positions_inertial(cfg, env)
 
+    # Achievable information rate while a station is up, both with the vehicle
+    # turned to put the patch on the station (the -3 dB nominal pointing loss)
+    # and without (the -10 dB worst case, patch wherever it happens to be).
+    best_range = np.where(visible, np.min(ranges, axis=0), 1e12)
+    link_pointed = np.where(visible,
+                            comms.achievable_bitrate_bps(cfg, best_range), 0.0)
+    link_unpointed = np.where(
+        visible,
+        comms.achievable_bitrate_bps(cfg, best_range, worst_case_pointing=True),
+        0.0)
+    # A contact is flown antenna-on-station only where it has to be. Everywhere
+    # the unpointed link closes, the rate it gives is already far more than the
+    # backlog needs, so the repoint would buy throughput the mission cannot use
+    # and cost a magnetorquer manoeuvre at each end.
+    pointed_contact = (link_unpointed <= 0.0) & (link_pointed > 0.0)
+    link_bps = np.where(pointed_contact, link_pointed, link_unpointed)
+
     # Contacts are committed to *before* the station rises. A magnetorquer slew
     # to the downlink attitude is a median ~50 deg repoint, which at the few
     # tenths of a degree per second this vehicle can manage eats most of a
@@ -284,7 +333,8 @@ def simulate(cfg: MissionConfig,
     # spends every contact turning and downlinks nothing. The pass list is
     # known from the ephemeris, so the slew starts ahead of AOS instead.
     committed = downlink_commitment(
-        env, passes, float(cfg.spacecraft.conops.downlink_lead_time_s))
+        env, passes, float(cfg.spacecraft.conops.downlink_lead_time_s),
+        unpointed_bps=link_unpointed)
     # A station that is actually up wins over one that is merely coming: the
     # visible one is the link being flown, the committed one only says where to
     # be pointed when it rises.
@@ -292,10 +342,6 @@ def simulate(cfg: MissionConfig,
 
     dl_dcm = downlink_attitude(env, aim_station, standby_dcm, station_pos_N)
 
-    # Achievable information rate while a station is up.
-    best_range = np.where(visible, np.min(ranges, axis=0), 1e12)
-    link_bps = comms.achievable_bitrate_bps(cfg, best_range)
-    link_bps = np.where(visible, link_bps, 0.0)
 
     # Pre-compute generation for each candidate attitude.
     gen_experiment = power.generation_w(cfg, env, array, pointing.dcm_BN)
@@ -327,6 +373,12 @@ def simulate(cfg: MissionConfig,
     # vehicle from being where it was told to go.
     pointing_accuracy = math.radians(
         float(cfg.spacecraft.adcs.control_error_deg))
+
+    # Orbit number per sample, from ascending-node crossings -- the same split
+    # the timeline figures use. Science permission is scoped to it.
+    z_pos = env.r_BN_N[:, 2]
+    orbit_index = np.concatenate(
+        [[0], np.cumsum((z_pos[:-1] < 0.0) & (z_pos[1:] >= 0.0))])
 
     inertia = inertia_matrix(cfg)
     slew_margin = float(cfg.spacecraft.adcs.settle_margin)
@@ -373,6 +425,9 @@ def simulate(cfg: MissionConfig,
     slew_elapsed_s = 0.0
     battery_limited = False
     in_safe = False
+    slew_skipped = 0
+    experiment_armed = False
+    current_orbit = -1
     mission_failed = False
     failure_time_s = float("nan")
     unserved_wh = 0.0
@@ -393,6 +448,54 @@ def simulate(cfg: MissionConfig,
                         * float(array_settings.degradation))
 
     store = storage.ImageStore(cfg, dt, n)
+
+    # How long the reason for a manoeuvre lasts, per mode, so the scheduler can
+    # decline one whose destination will not outlive the turn.
+    #
+    # For science that is NOT simply "is a legal attitude available". Feasibility
+    # can hold for a whole 45-minute window while the planned attitude inside it
+    # jumps every couple of minutes, and a repoint is only worth flying if the
+    # attitude it arrives at is still the one being planned. So the window is
+    # cut wherever the plan itself steps by more than a tracking rate: what is
+    # left is how long this particular attitude survives.
+    #
+    # trace(A B^T) = sum(A*B) for the relative rotation, so the whole step
+    # history is one einsum rather than a per-sample matrix product.
+    plan = pointing.dcm_BN
+    plan_trace = np.einsum("nij,nij->n", plan[1:], plan[:-1])
+    plan_step = np.arccos(np.clip((plan_trace - 1.0) / 2.0, -1.0, 1.0))
+    plan_holds = np.zeros(n, dtype=bool)
+    plan_holds[:-1] = (pointing.feasible[:-1] & pointing.feasible[1:]
+                       & (plan_step <= intra_mode_slew_threshold))
+    mode_validity_s = {
+        MODE_EXPERIMENT: remaining_seconds(plan_holds, dt),
+        MODE_DOWNLINK: remaining_seconds(pointed_contact, dt),
+    }
+
+    def price_slew(i: int, target_dcm: np.ndarray, angle: float) -> float:
+        """Seconds this specific manoeuvre takes, against the real field.
+
+        The eigenaxis it has to turn about, the inertia about that axis, and
+        the authority the field actually offers about it over the coming
+        orbits. The field is taken in the body frame held at the start of the
+        slew; the vehicle also rotates during the manoeuvre, which this does
+        not track, but that is second order next to the twice-per-orbit sweep
+        of the field itself.
+        """
+        nonlocal slew_unreachable
+        axis_B, _ = rotation_axis_angle(current_dcm, target_dcm)
+        b_body = (b_field_N[i:i + slew_horizon] @ current_dcm.T)
+        torque_series = available_torque_about(dipole, b_body, axis_B)
+        seconds = slew_time_eigenaxis(
+            torque_series, eigenaxis_inertia(inertia, axis_B),
+            angle, dt, 0, slew_margin)
+        if not math.isfinite(seconds) or seconds <= 0:
+            # The integrator gave up: no field geometry inside its horizon lets
+            # this manoeuvre finish. Do not deadlock the scheduler on it --
+            # charge the horizon and move on, and count it so it cannot hide.
+            slew_unreachable += 1
+            return SLEW_GIVE_UP_S
+        return seconds
 
     for i in range(n):
         soc_now = level_wh / capacity_wh
@@ -438,9 +541,27 @@ def simulate(cfg: MissionConfig,
         # imaging. Dropping out at the standby level is still safe by
         # construction, because that level is the safe reserve *plus* a whole
         # worst-case contact.
+        # Reaching the entry level arms science for the rest of the orbit.
+        # Charge is not the thing that varies within an orbit -- the legal
+        # pointing windows are -- so re-earning the entry level after every gap
+        # in feasibility means the vehicle can be barred from a window it has
+        # the energy for, purely because it spent the last one observing. Once
+        # the battery has shown it can fund a block, it keeps that permission
+        # until the orbit ends or it falls to the exit level.
+        if orbit_index[i] != current_orbit:
+            current_orbit = orbit_index[i]
+            experiment_armed = False
+        if soc_now >= soc_experiment:
+            experiment_armed = True
+
         in_experiment = (current_mode == MODE_EXPERIMENT
                          or (slewing and pending_mode == MODE_EXPERIMENT))
-        experiment_entry = soc_standby if in_experiment else soc_experiment
+        if in_experiment or experiment_armed:
+            experiment_entry = soc_standby
+        else:
+            experiment_entry = soc_experiment
+        if soc_now < soc_standby:
+            experiment_armed = False
         # Room on the image store gets the same enter-hard, exit-soft
         # treatment, and for the same reason. Once the store is full it frees a
         # trickle of space as processed frames age out of retention; a gate
@@ -477,14 +598,22 @@ def simulate(cfg: MissionConfig,
         else:
             target_mode = MODE_STANDBY
 
-        target_dcm = {
-            # Safe points at the Sun: the survival attitude is the charging
-            # attitude, which is the whole point of retreating to it.
-            MODE_SAFE: standby_dcm[i],
-            MODE_STANDBY: standby_dcm[i],
-            MODE_EXPERIMENT: pointing.dcm_BN[i],
-            MODE_DOWNLINK: dl_dcm[i],
-        }[target_mode]
+        if target_mode == MODE_DOWNLINK and not pointed_contact[i]:
+            # The link closes with the patch wherever it happens to be, so the
+            # contact is flown from the attitude already held: no manoeuvre in,
+            # none back out, and the vehicle can go on charging or observing
+            # through it. The rate charged is the worst-case-pointing one, which
+            # is what makes this honest rather than free.
+            target_dcm = current_dcm
+        else:
+            target_dcm = {
+                # Safe points at the Sun: the survival attitude is the charging
+                # attitude, which is the whole point of retreating to it.
+                MODE_SAFE: standby_dcm[i],
+                MODE_STANDBY: standby_dcm[i],
+                MODE_EXPERIMENT: pointing.dcm_BN[i],
+                MODE_DOWNLINK: dl_dcm[i],
+            }[target_mode]
 
         # -- decide between tracking and slewing ------------------------------
         # Two different things move the target attitude, and they cost
@@ -502,31 +631,47 @@ def simulate(cfg: MissionConfig,
         mode_changed = target_mode != current_mode
 
         if not slewing:
-            if angle_to_target > intra_mode_slew_threshold or (
-                    mode_changed and angle_to_target > pointing_accuracy):
+            needed = (angle_to_target > intra_mode_slew_threshold
+                      or (mode_changed
+                          and angle_to_target > pointing_accuracy))
+            seconds = 0.0
+            if needed:
+                seconds = price_slew(i, target_dcm, angle_to_target)
+                # Will the reason for this manoeuvre still be there when the
+                # manoeuvre ends? A magnetorquer turn takes minutes, and both
+                # of the things worth turning for -- a legal pointing window
+                # and a station pass -- are known from the ephemeris, so this
+                # is schedulable in advance rather than discovered on arrival.
+                #
+                # Without the test the vehicle turns five minutes into a
+                # science window with one minute left in it, or repoints for
+                # the last few seconds of a contact. Measured, every one of
+                # those manoeuvres was held for less time than it took to fly:
+                # they are pure loss, and they were most of the slewing left.
+                horizon = mode_validity_s.get(target_mode)
+                if horizon is not None:
+                    arrival = i + int(math.ceil(seconds / dt))
+                    payoff = (float(horizon[arrival]) if arrival < n else 0.0)
+                    if payoff < seconds:
+                        # Not worth flying. Fall back to sun-pointing, which is
+                        # always worth holding and is where the vehicle would
+                        # rather be than part way to somewhere pointless.
+                        slew_skipped += 1
+                        target_mode = MODE_STANDBY
+                        target_dcm = standby_dcm[i]
+                        angle_to_target = principal_angle(current_dcm,
+                                                          target_dcm)
+                        mode_changed = target_mode != current_mode
+                        needed = (angle_to_target > intra_mode_slew_threshold
+                                  or (mode_changed
+                                      and angle_to_target > pointing_accuracy))
+                        seconds = (price_slew(i, target_dcm, angle_to_target)
+                                   if needed else 0.0)
+
+            if needed:
                 slewing = True
                 slew_count += 1
                 pending_mode = target_mode
-                # Price this specific manoeuvre: the eigenaxis it has to turn
-                # about, the inertia about that axis, and the authority the
-                # field actually offers about it over the coming orbits. The
-                # field is taken in the body frame held at the start of the
-                # slew; the vehicle also rotates during the manoeuvre, which
-                # this does not track, but that is second order next to the
-                # twice-per-orbit sweep of the field itself.
-                axis_B, _ = rotation_axis_angle(current_dcm, target_dcm)
-                b_body = (b_field_N[i:i + slew_horizon] @ current_dcm.T)
-                torque_series = available_torque_about(dipole, b_body, axis_B)
-                seconds = slew_time_eigenaxis(
-                    torque_series, eigenaxis_inertia(inertia, axis_B),
-                    angle_to_target, dt, 0, slew_margin)
-                if not math.isfinite(seconds) or seconds <= 0:
-                    # The integrator gave up: no field geometry inside its
-                    # horizon lets this manoeuvre finish. Do not deadlock the
-                    # scheduler on it -- charge the horizon and move on, and
-                    # count it so it cannot hide.
-                    seconds = SLEW_GIVE_UP_S
-                    slew_unreachable += 1
                 slew_rate = angle_to_target / seconds
                 slew_budget_s = seconds * SLEW_OVERRUN_FACTOR
                 slew_elapsed_s = 0.0
@@ -654,6 +799,7 @@ def simulate(cfg: MissionConfig,
         planned_slew_seconds=np.array(slew_seconds_planned),
         slew_unreachable=slew_unreachable,
         slew_abandoned=slew_abandoned,
+        slew_skipped=slew_skipped,
         battery_limited=battery_limited,
         mission_failed=mission_failed,
         failure_time_s=failure_time_s,
@@ -728,6 +874,7 @@ def summarise(cfg: MissionConfig, env: EnvironmentResult,
             if result.planned_slew_seconds.size else 0.0),
         "slews_unreachable": result.slew_unreachable,
         "slews_abandoned": result.slew_abandoned,
+        "slews_skipped": result.slew_skipped,
         **({f"store_{k}": v
             for k, v in result.store.summary(env).items()}
            if result.store is not None else {}),

@@ -74,7 +74,18 @@ radio:
   rain_loss_db: -0.1            # [budget] 99.9 % availability
   frequency_ghz: 2.25           # centre of the Leaf Line 2200-2290 downlink
   eb_n0_required_db: 11.0       # [budget] BPSK
-  required_margin_db: 6.0       # [budget] UNP requirement
+  # Margin demanded on top of the demodulator's Eb/N0 threshold, as a LINEAR
+  # POWER RATIO. 1.5 means "the noise floor plus 50 %", i.e. 10*log10(1.5) =
+  # 1.76 dB, so GFSK's 14 dB threshold becomes a 15.8 dB requirement. [given]
+  #
+  # This replaces the flat 6 dB the UNP budget carried. At 9.6 kbps that 6 dB
+  # was not what set the link: even at 10 deg elevation with the patch edge-on
+  # (the -10 dB worst-case pointing loss) the link shows ~29.6 dB of Eb/N0, so
+  # the requirement was met with more than 13 dB to spare either way. Where it
+  # mattered was the CONOPS -- see `downlink_needs_pointing` in `comms`.
+  required_margin_factor: 1.5
+  # Kept for reference and used only if the factor above is removed.
+  required_margin_db: 6.0       # [budget] UNP requirement, superseded
   implementation_loss_db: 0.0
   # Modulation / coding. The budget uses rate-1/2 convolutional FEC, doubling
   # the transmitted bits.

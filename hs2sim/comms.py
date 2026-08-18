@@ -119,6 +119,27 @@ def eb_n0_required_db(cfg: MissionConfig) -> float:
     return float(cfg.radio.eb_n0_required_db)
 
 
+def required_margin_db(cfg: MissionConfig) -> float:
+    """Margin demanded above the demodulator threshold, in dB.
+
+    Configured as a linear power ratio (``required_margin_factor``) because
+    that is how the requirement is stated -- "the noise floor plus 50 %" is
+    50 % more received power, which is 10*log10(1.5) = 1.76 dB, not 50 % more
+    decibels. Falls back to the flat ``required_margin_db`` if no factor is
+    given, which is what the UNP budget carried.
+    """
+    factor = getattr(cfg.radio, "required_margin_factor", None)
+    if factor:
+        return 10.0 * math.log10(float(factor))
+    return float(cfg.radio.required_margin_db)
+
+
+def link_threshold_db(cfg: MissionConfig) -> float:
+    """Total Eb/N0 a link has to show to be declared closed."""
+    return (eb_n0_required_db(cfg) + required_margin_db(cfg)
+            + float(cfg.radio.implementation_loss_db))
+
+
 def candidate_bitrates_kbps(cfg: MissionConfig) -> list[float]:
     """Rates the link solver is allowed to choose from this run."""
     if fixed_rate_enabled(cfg):
@@ -142,9 +163,7 @@ def achievable_bitrate_bps(cfg: MissionConfig,
     """
     radio = cfg.radio
     cn0 = c_over_n0_dbhz(cfg, range_m, worst_case_pointing)
-    required = (eb_n0_required_db(cfg)
-                + float(radio.required_margin_db)
-                + float(radio.implementation_loss_db))
+    required = link_threshold_db(cfg)
     rates_bps = np.array([r * 1e3 for r in candidate_bitrates_kbps(cfg)])
     fec = float(radio.fec_overhead)
 
@@ -162,6 +181,44 @@ def link_margin_db(cfg: MissionConfig, range_m: float, channel_rate_bps: float,
     eb_n0 = cn0 - 10.0 * math.log10(channel_rate_bps)
     return float(eb_n0 - eb_n0_required_db(cfg)
                  - float(cfg.radio.implementation_loss_db))
+
+
+def margin_over_threshold_db(cfg: MissionConfig,
+                             range_m: np.ndarray,
+                             channel_rate_bps: np.ndarray,
+                             worst_case_pointing: bool = False) -> np.ndarray:
+    """(N,) dB the link has in hand over what it needs, per sample.
+
+    Positive means the link closes. This is the number the dashboard plots:
+    a link that closes by 14 dB and one that closes by 0.5 dB are both "up",
+    and only one of them is a design that can afford to stop pointing at the
+    ground station.
+    """
+    cn0 = c_over_n0_dbhz(cfg, np.asarray(range_m, dtype=float),
+                         worst_case_pointing)
+    rate = np.asarray(channel_rate_bps, dtype=float)
+    with np.errstate(divide="ignore", invalid="ignore"):
+        eb_n0 = cn0 - 10.0 * np.log10(np.where(rate > 0, rate, np.nan))
+    return eb_n0 - link_threshold_db(cfg)
+
+
+def downlink_needs_pointing(cfg: MissionConfig,
+                            range_m: np.ndarray) -> np.ndarray:
+    """(N,) whether the contact has to be flown antenna-on-station.
+
+    Repointing the vehicle to put the +x patch on the ground station is what
+    justifies the -3 dB nominal pointing loss instead of the -10 dB worst case
+    where the patch is edge-on. It also costs a manoeuvre at each end, and a
+    magnetorquer-only 3U takes minutes over one.
+
+    Whether that is worth doing is a link-budget question, not a policy, so it
+    is answered here rather than assumed: if the link still closes with the
+    worst-case pointing loss, the repoint buys nothing and the contact is flown
+    from whatever attitude the vehicle is already holding. At 9.6 kbps it
+    closes by more than 13 dB at 10 deg elevation, so it never needs pointing;
+    at 1 Mbps the same geometry fails by 6 dB, so it always does.
+    """
+    return achievable_bitrate_bps(cfg, range_m, worst_case_pointing=True) <= 0.0
 
 
 def analyse_passes(cfg: MissionConfig,

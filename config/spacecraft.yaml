@@ -98,6 +98,15 @@ solar_array_options:
       - {name: deployable, normal: [-0.70710678, 0.70710678, 0.0], peak_w: 14.8, deployable: true, count: 2}
       - {name: body_plus_y, normal: [0.0, 1.0, 0.0], peak_w: 7.5, deployable: false, count: 1}
 
+  E_2panel_135_no_body:
+    description: >
+      Geometry C's deployable wing with the body-mounted +y panel removed, to
+      price what that 7.5 W panel is actually worth. Identical pointing, 2.5 W
+      less peak, and no body panel to shadow or to constrain the layout.
+    peak_total_w: 14.8
+    panels:
+      - {name: deployable, normal: [-0.70710678, 0.70710678, 0.0], peak_w: 14.8, deployable: true, count: 2}
+
 solar_array:
   # Cell/MPPT behaviour applied on top of the cosine law.
   # peak_w is already an end-of-string number, so only pointing and eclipse

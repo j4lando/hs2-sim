@@ -193,34 +193,70 @@ def test_the_transmitter_is_not_keyed_before_the_station_rises():
     assert result.downlinked_bytes[no_link].sum() == 0.0
 
 
-def test_a_target_that_outruns_the_vehicle_is_abandoned_to_sun_pointing():
-    """A manoeuvre that cannot converge must be given up, not chased forever.
-
-    A station crossing overhead moves faster than a magnetorquer-only 3U can
-    turn, so a rate-limited follower aimed at one never arrives. Left alone it
-    burns the rest of the orbit in SLEW. Here the commanded attitude spins far
-    faster than any achievable slew rate, which is that case in the limit.
-    """
-    from hs2sim import adcs, geometry, power
-    env = sunlit_env()
-    n = env.n_samples
-    cfg = MissionConfig()
-    array = power.all_array_geometries(cfg)[0]
-    standby = np.tile(np.eye(3), (n, 1, 1))
-    # An experiment attitude tumbling at ~9 deg per sample -- far beyond the
-    # few tenths of a degree per second the vehicle can manage.
+def _spinning_pointing(n, per_sample_rad, offset_rad=0.0):
+    """An experiment plan that rotates by a fixed angle every sample."""
+    from hs2sim import geometry
     spin = np.zeros((n, 3, 3))
     for i in range(n):
-        a = 0.157 * i
+        a = offset_rad + per_sample_rad * i
         spin[i] = np.array([[math.cos(a), -math.sin(a), 0.0],
                             [math.sin(a), math.cos(a), 0.0],
                             [0.0, 0.0, 1.0]])
-    pointing = geometry.PointingResult(
+    return geometry.PointingResult(
         feasible=np.ones(n, bool), dcm_BN=spin,
         x_axis_N=np.tile([1.0, 0, 0], (n, 1)),
         z_axis_N=np.tile([0, 0, 1.0], (n, 1)),
         roll_used=np.zeros(n), array_power_frac=np.zeros(n),
         reject_reason=np.zeros(n, int))
+
+
+def test_a_target_that_outruns_the_vehicle_is_never_chased_at_all():
+    """A manoeuvre whose destination will not outlast it is not begun.
+
+    A station crossing overhead, or a plan that jumps faster than a tracking
+    rate, moves faster than a magnetorquer-only 3U can turn: a rate-limited
+    follower aimed at one never arrives, and left alone burns the orbit in
+    SLEW. Both are knowable in advance, so the scheduler declines rather than
+    setting off and giving up later.
+    """
+    from hs2sim import adcs, power
+    env = sunlit_env()
+    n = env.n_samples
+    cfg = MissionConfig()
+    array = power.all_array_geometries(cfg)[0]
+    standby = np.tile(np.eye(3), (n, 1, 1))
+    # ~9 deg per sample, far beyond the few tenths of a degree per second the
+    # vehicle can manage, so no arrival attitude is still current on arrival.
+    pointing = _spinning_pointing(n, 0.157)
+    authority = adcs.torque_authority(cfg, env)
+    result = conops.simulate(cfg, env, array, pointing, standby, authority,
+                             0.2, [])
+
+    assert result.slew_skipped > 0, "the hopeless manoeuvre was not declined"
+    # And the vehicle is not left turning: it holds sun-pointing instead.
+    assert np.mean(result.mode == conops.MODE_SLEW) < 0.10
+    assert np.mean(result.mode == conops.MODE_STANDBY) > 0.80
+
+
+def test_a_slew_that_diverges_after_starting_is_still_abandoned():
+    """The look-ahead gate is not a replacement for the overrun guard.
+
+    A plan that steps slowly enough to look trackable can still walk away from
+    the vehicle faster than it converges, and that only shows up once the
+    manoeuvre is under way. The guard that gives such a slew up has to survive
+    the gate being added in front of it.
+    """
+    from hs2sim import adcs, power
+    env = sunlit_env()
+    n = env.n_samples
+    cfg = MissionConfig()
+    array = power.all_array_geometries(cfg)[0]
+    standby = np.tile(np.eye(3), (n, 1, 1))
+    # Starts a long way from sun-pointing, so a real manoeuvre is commanded,
+    # then walks on at 4 deg per sample. That is under the 5 deg threshold, so
+    # the gate sees a plan it can track -- but it is 0.4 deg/s, faster than the
+    # magnetorquers deliver, so the manoeuvre never converges once under way.
+    pointing = _spinning_pointing(n, math.radians(4.0), offset_rad=2.0)
     authority = adcs.torque_authority(cfg, env)
     result = conops.simulate(cfg, env, array, pointing, standby, authority,
                              0.2, [])
@@ -229,7 +265,7 @@ def test_a_target_that_outruns_the_vehicle_is_abandoned_to_sun_pointing():
     # Each giving-up redirects to sun-pointing and the scheduler then commands
     # afresh, so the run is a sequence of bounded manoeuvres rather than one
     # open-ended chase.
-    assert result.slew_count >= result.slew_abandoned > 1
+    assert result.slew_count >= result.slew_abandoned
 
 
 def test_abandoned_slews_are_counted_in_the_summary():
@@ -355,3 +391,107 @@ def test_time_on_target_is_reported_beside_the_counts():
         conops.simulate(cfg, env, array, pointing, standby, authority, 0.2,
                         [], budget=budget).mode == conops.MODE_EXPERIMENT)) * dt
     assert fast["experiment_hours_total"] == pytest.approx(expected / 3600.0)
+
+
+def test_a_contact_that_closes_edge_on_is_not_flown_antenna_on_station():
+    """The repoint is only worth two slews where it is the link, not the rate.
+
+    At 9.6 kbps this vehicle closes to a Leaf Space site with the patch edge-on
+    by more than 13 dB, and the mission generates far less data than even that
+    link can carry. Turning to point the antenna would buy throughput nothing
+    needs and cost a manoeuvre at each end.
+    """
+    from hs2sim import adcs, comms, geometry, power
+    # Housekeeping alone takes days to reach the shipped 500 kB trigger, and
+    # this fixture runs for hours, so trigger on any backlog at all.
+    cfg = MissionConfig().copy_with(
+        **{"spacecraft.conops.downlink_trigger_bytes": 1.0})
+    n, dt, period = 900, 10.0, 5580.0
+    env = orbit_env(n, dt, period)
+    env.shadow_factor[:] = 1.0
+    ang = 2 * np.pi * env.t_s / period
+    env.b_field_N = 3.5e-5 * np.stack(
+        [np.cos(ang), np.sin(ang), 0.3 * np.ones_like(ang)], axis=1)
+    # A realistic five-minute pass, close enough that the link closes either
+    # way. Length matters: the standby threshold is priced off the *longest*
+    # contact, so an implausibly long one would put the entry level out of
+    # reach and the vehicle would decline the contact for want of charge.
+    env.station_access[0, 200:230] = True
+    env.station_range[0, :] = 700e3
+    array = power.all_array_geometries(cfg)[0]
+    standby = np.tile(np.eye(3), (n, 1, 1))
+    pointing = geometry.PointingResult(
+        feasible=np.zeros(n, bool), dcm_BN=standby.copy(),
+        x_axis_N=np.tile([1.0, 0, 0], (n, 1)),
+        z_axis_N=np.tile([0, 0, 1.0], (n, 1)),
+        roll_used=np.zeros(n), array_power_frac=np.zeros(n),
+        reject_reason=np.zeros(n, int))
+    authority = adcs.torque_authority(cfg, env)
+    passes = comms.analyse_passes(cfg, env)
+
+    flown = conops.simulate(cfg, env, array, pointing, standby, authority,
+                            0.2, passes)
+    assert np.any(flown.mode == conops.MODE_DOWNLINK), "no contact was flown"
+    # Bytes moved, and not one manoeuvre was spent getting there.
+    assert flown.downlinked_bytes.sum() > 0
+    assert not np.any(flown.mode == conops.MODE_SLEW), \
+        "the vehicle turned for a contact that did not need pointing"
+
+    # Starve the link until the 7 dB between the two pointing cases straddles
+    # the threshold -- it closes pointed and does not close edge-on -- and the
+    # repoint becomes the link rather than a rate bonus, so it happens.
+    weak = cfg.copy_with(**{"radio.tx_power_w": 0.02,
+                            "radio.tx_antenna_gain_dbi": 0.0})
+    assert comms.achievable_bitrate_bps(weak, np.array([700e3]))[0] > 0
+    assert comms.achievable_bitrate_bps(
+        weak, np.array([700e3]), worst_case_pointing=True)[0] == 0
+    weak_passes = comms.analyse_passes(weak, env)
+    weak_flown = conops.simulate(weak, env, array, pointing, standby, authority,
+                                 0.2, weak_passes)
+    assert np.any(weak_flown.mode == conops.MODE_SLEW), \
+        "a contact that needed pointing was flown without turning"
+
+
+def test_reaching_the_entry_level_arms_science_for_the_rest_of_the_orbit():
+    """Charge does not vary within an orbit the way pointing windows do.
+
+    Re-earning the full entry level after every gap in feasibility bars the
+    vehicle from a window it has the energy for, purely because it spent the
+    last one observing. Once the battery has shown it can fund a block it keeps
+    the permission until the orbit ends or it falls to the exit level.
+    """
+    from hs2sim import adcs, energy, power
+    cfg = MissionConfig()
+    n, dt, period = 1400, 10.0, 5580.0
+    env = orbit_env(n, dt, period)
+    env.shadow_factor[:] = 1.0
+    ang = 2 * np.pi * env.t_s / period
+    env.b_field_N = 3.5e-5 * np.stack(
+        [np.cos(ang), np.sin(ang), 0.3 * np.ones_like(ang)], axis=1)
+    array = power.all_array_geometries(cfg)[2]
+    from hs2sim import geometry
+    # A fixed attitude rather than the sun-pointing one, so the run discharges
+    # and the SOC actually crosses the entry level part way through an orbit.
+    standby = np.tile(np.eye(3), (n, 1, 1))
+    # Feasible in bursts, so the vehicle must re-decide repeatedly.
+    feasible = np.zeros(n, bool)
+    for start in range(0, n, 200):
+        feasible[start:start + 120] = True
+    pointing = geometry.PointingResult(
+        feasible=feasible, dcm_BN=standby.copy(),
+        x_axis_N=np.tile([1.0, 0, 0], (n, 1)),
+        z_axis_N=np.tile([0, 0, 1.0], (n, 1)),
+        roll_used=np.zeros(n), array_power_frac=np.zeros(n),
+        reject_reason=np.zeros(n, int))
+    authority = adcs.torque_authority(cfg, env)
+    budget = energy.budget(cfg, env, authority, [])
+    result = conops.simulate(cfg, env, array, pointing, standby, authority,
+                             0.2, [], budget=budget)
+
+    observing = result.mode == conops.MODE_EXPERIMENT
+    assert observing.any()
+    # Some observing happened while charge was under the entry level -- which
+    # is only possible because the permission was already held.
+    assert np.any(result.soc[observing] < budget.soc_experiment)
+    # And every observing sample is above the exit level.
+    assert result.soc[observing].min() >= budget.soc_standby - 0.01

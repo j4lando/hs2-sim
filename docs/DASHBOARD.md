@@ -47,6 +47,13 @@ The charts, one measure each — no chart carries two y scales:
   bytes sent.
 - **Achievable link rate (kbit/s)** — what the budget closes at the current
   range; zero when no station is up.
+- **Link margin (dB over threshold)** — decibels in hand over what the
+  demodulator needs, at the rate actually flown and with the pointing loss
+  actually incurred. Zero is the threshold, not zero signal. It hugs zero
+  because the radio spends spare margin on bitrate rather than banking it; the
+  note carries the figure that says how much is really there, and why the
+  vehicle no longer turns to point at ground stations. See
+  [LINK_BUDGET.md](LINK_BUDGET.md).
 - **Mode** — the flown mode as a colour band, the same strip that sits under
   every chart above, on the same encoding the PNG timeline uses.
 

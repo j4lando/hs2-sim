@@ -47,6 +47,11 @@ def _resample(minutes: np.ndarray, values: np.ndarray,
     else:
         out = np.interp(grid, minutes, values)
     inside = (grid >= minutes[0] - 1e-9) & (grid <= minutes[-1] + 1e-9)
+    if not categorical:
+        # A series can be undefined where the quantity does not exist -- link
+        # margin with no station up, say. That is a gap in the same sense as a
+        # partial orbit, and JSON has no NaN to carry it with.
+        inside = inside & np.isfinite(out)
     return [None if not ok else (int(v) if categorical else round(float(v), 4))
             for ok, v in zip(inside, out)]
 
@@ -54,7 +59,8 @@ def _resample(minutes: np.ndarray, values: np.ndarray,
 def _orbit_payload(cfg: MissionConfig, env: EnvironmentResult,
                    flown: ConopsResult, segments, grid: np.ndarray,
                    store: dict[str, np.ndarray], link_kbps: np.ndarray,
-                   access: np.ndarray, downlinked_mb: np.ndarray) -> list[dict]:
+                   margin_db: np.ndarray, access: np.ndarray,
+                   downlinked_mb: np.ndarray) -> list[dict]:
     dt = env.dt_s
     queue_mb = flown.queue_bytes / 1e6
     net_w = flown.generation_w - flown.load_w
@@ -82,6 +88,7 @@ def _orbit_payload(cfg: MissionConfig, env: EnvironmentResult,
             "proc": _resample(minutes, store["processed_gb"][span], grid),
             "sent": _resample(minutes, downlinked_mb[span], grid),
             "link": _resample(minutes, link_kbps[span], grid),
+            "db": _resample(minutes, margin_db[span], grid),
             "access": _resample(minutes, access[span], grid, categorical=True),
             "stats": {
                 "min_soc": round(float(flown.soc[span].min() * 100.0), 1),
@@ -122,9 +129,26 @@ def build(cfg: MissionConfig, env: EnvironmentResult, results: dict,
     ranges = np.where(env.station_access, env.station_range, np.inf)
     visible = np.isfinite(np.min(ranges, axis=0))
     best_range = np.where(visible, np.min(ranges, axis=0), 1e12)
-    link_kbps = np.where(visible,
-                         comms.achievable_bitrate_bps(cfg, best_range) / 1e3,
-                         0.0)
+    # Both the rate the vehicle gets by turning the patch onto the station and
+    # the one it gets without. The scheduler only turns where the second is
+    # zero, so which of the two applies is itself worth carrying.
+    pointed_bps = np.where(
+        visible, comms.achievable_bitrate_bps(cfg, best_range), 0.0)
+    unpointed_bps = np.where(
+        visible,
+        comms.achievable_bitrate_bps(cfg, best_range, worst_case_pointing=True),
+        0.0)
+    needs_pointing = (unpointed_bps <= 0.0) & (pointed_bps > 0.0)
+    flown_bps = np.where(needs_pointing, pointed_bps, unpointed_bps)
+    link_kbps = flown_bps / 1e3
+    # dB in hand over what the demodulator needs, at the rate actually flown
+    # and with the pointing loss actually incurred. Zero where no station is up.
+    channel_bps = flown_bps * float(cfg.radio.fec_overhead)
+    margin_db = np.where(
+        needs_pointing,
+        comms.margin_over_threshold_db(cfg, best_range, channel_bps, False),
+        comms.margin_over_threshold_db(cfg, best_range, channel_bps, True))
+    margin_db = np.where(visible & (flown_bps > 0), margin_db, np.nan)
     access = visible.astype(int)
 
     image_bytes = comms.image_bytes(cfg)
@@ -219,7 +243,8 @@ def build(cfg: MissionConfig, env: EnvironmentResult, results: dict,
                     store_stats.get("unprocessed_growth_images_per_day", 0.0))),
             },
             "orbits": _orbit_payload(cfg, env, flown, segments, grid,
-                                     store, link_kbps, access, downlinked_mb),
+                                     store, link_kbps, margin_db, access,
+                                     downlinked_mb),
         }
 
     payload["meta"]["processing_period_s"] = float(
@@ -228,6 +253,33 @@ def build(cfg: MissionConfig, env: EnvironmentResult, results: dict,
     payload["meta"]["processing_images_per_day"] = round(
         n_cameras * 86400.0 / float(cfg.payload.processing_period_s), 0)
     payload["meta"]["image_mb"] = round(image_bytes / 1e6, 3)
+    payload["meta"]["link"] = {
+        "eb_n0_required_db": round(comms.eb_n0_required_db(cfg), 2),
+        "margin_db": round(comms.required_margin_db(cfg), 2),
+        "threshold_db": round(comms.link_threshold_db(cfg), 2),
+        "margin_factor": float(
+            getattr(cfg.radio, "required_margin_factor", 0.0) or 0.0),
+        "modulation": ("GFSK" if comms.fixed_rate_enabled(cfg) else "BPSK"),
+        "pointed_fraction": round(float(np.mean(needs_pointing[visible]))
+                                  if visible.any() else 0.0, 4),
+        "median_margin_db": (round(float(np.nanmedian(margin_db)), 1)
+                             if np.isfinite(margin_db).any() else None),
+        "min_margin_db": (round(float(np.nanmin(margin_db)), 1)
+                          if np.isfinite(margin_db).any() else None),
+        # Margin at the SLOWEST rate the radio can be commanded to, with the
+        # patch edge-on. The adaptive solver spends spare margin on bitrate, so
+        # the margin at the flown rate is small by construction and says
+        # nothing about how much is really in hand. This does -- and it is the
+        # number the decision to stop pointing at the ground station rests on.
+        "floor_margin_db": (
+            round(float(np.min(comms.margin_over_threshold_db(
+                cfg, best_range[visible],
+                np.full(int(visible.sum()),
+                        min(comms.candidate_bitrates_kbps(cfg)) * 1e3),
+                True))), 1)
+            if visible.any() else None),
+        "floor_rate_kbps": min(comms.candidate_bitrates_kbps(cfg)),
+    }
     payload["viz"] = globe.payload(cfg, env, timelines, segments, period_min)
 
     out_dir.mkdir(exist_ok=True)
@@ -274,7 +326,8 @@ header{position:sticky;top:0;z-index:20;background:var(--surface);
 h1{margin:0 0 2px;font-size:16px;font-weight:600;letter-spacing:-.01em}
 .sub{color:var(--ink2);font-size:12px}
 .bar{display:flex;gap:16px;align-items:center;flex-wrap:wrap;margin-top:12px}
-.tabs{display:flex;gap:4px;background:var(--plane);padding:3px;border-radius:8px}
+.tabs{display:flex;gap:4px;background:var(--plane);padding:3px;border-radius:8px;flex-wrap:wrap;max-width:100%}
+.tab{white-space:nowrap}
 .tab{border:0;background:transparent;color:var(--ink2);padding:5px 12px;
   border-radius:6px;font:inherit;font-size:12px;cursor:pointer}
 .tab[aria-selected=true]{background:var(--panel);color:var(--ink);
@@ -391,6 +444,8 @@ const CHARTS = [
   {id:"link", title:"Achievable link rate", unit:"kbit/s", note:"What the "
     +"budget closes at the current range; zero when no station is up.",
    series:[{k:"link",label:"link rate",color:"#2a78d6",width:2}]},
+  {id:"db", title:"Link margin", unit:"dB over threshold", note:"", db:true,
+   series:[{k:"db",label:"margin",color:"#4a3aa7",width:2}], zero:true},
 ];
 
 /* ---------------------------------------------------------------- layout - */
@@ -509,6 +564,29 @@ function storageNote(){
           + `want of room.</b>` : ``);
 }
 
+function dbNote(){
+  const L = M.link;
+  return `Decibels in hand over what the demodulator needs, at the rate `
+    + `actually flown and with the pointing loss actually incurred. `
+    + `${L.modulation} needs ${L.eb_n0_required_db} dB, plus a `
+    + (L.margin_factor
+        ? `${((L.margin_factor - 1) * 100).toFixed(0)} % power margin `
+          + `(${L.margin_db} dB)`
+        : `${L.margin_db} dB margin`)
+    + ` &rarr; <b>${L.threshold_db} dB threshold</b>. Zero on this axis is that `
+    + `threshold, not zero signal.<br>The curve hugs zero because the radio `
+    + `picks the fastest rate that closes: spare margin is spent on bitrate `
+    + `rather than banked, so a healthy link and a marginal one read much the `
+    + `same here. What is actually in hand is the margin at the slowest `
+    + `commandable rate with the patch edge-on &mdash; `
+    + `<b>${L.floor_margin_db} dB at ${L.floor_rate_kbps} kbit/s</b>, worst `
+    + `case over the run. That is why only `
+    + `${(L.pointed_fraction * 100).toFixed(0)} % of contact time is flown `
+    + `antenna-on-station: everywhere else the link closes with the patch `
+    + `where it already is, and the repoint is not worth two magnetorquer `
+    + `slews.`;
+}
+
 function chartSVG(o, spec){
   const [lo, hi] = extent(o, spec);
   const y = v => PAD.t + (H - PAD.t - PAD.b) * (1 - (v - lo) / (hi - lo));
@@ -615,7 +693,8 @@ function renderCharts(){
     return `<div class="card" data-id="${spec.id}">
       <h2>${spec.title} <span class="u" style="color:var(--muted);font-weight:400">(${
         spec.unit})</span></h2>
-      <div class="note">${spec.id === "storage" ? storageNote() : spec.note}</div>
+      <div class="note">${spec.id === "storage" ? storageNote()
+        : spec.id === "db" ? dbNote() : spec.note}</div>
       <div class="legend">${legend}</div>
       ${chartSVG(o, spec)}
     </div>`;
@@ -706,6 +785,7 @@ function showTip(e, i){
     ["stored", fmt(o.stored[i], 3) + " GB"],
     ["backlog", fmt(o.queue[i], 3) + " MB"],
     ["link", fmt(o.link[i], 0) + " kbit/s"],
+    ["margin", o.db[i] === null ? "—" : fmt(o.db[i], 1) + " dB"],
     ["station up", o.access[i] ? "yes" : "no"],
   ];
   tt.innerHTML = `<b>t + ${fmt(M.grid[i], 1)} min &middot; orbit ${orbit}</b>

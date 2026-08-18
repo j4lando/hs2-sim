@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import math
+
 import numpy as np
 import pytest
 
@@ -115,3 +117,65 @@ def test_max_experiments_inverts_the_data_budget():
     n = comms.max_experiments_from_downlink(cfg, capacity, contact)
     budget = comms.data_budget(cfg, n, contact)
     assert budget.downlink_bytes_per_day == pytest.approx(capacity, rel=1e-3)
+
+
+def test_the_margin_requirement_is_a_power_ratio_not_a_decibel_count():
+    """"The noise floor plus 50 %" is 50 % more power, which is 1.76 dB.
+
+    Reading it as 50 % more decibels would put a 14 dB GFSK threshold at 21 dB
+    -- a *harder* requirement than the 6 dB flat margin it replaced, which is
+    the opposite of what relaxing it means.
+    """
+    cfg = MissionConfig()
+    assert float(cfg.radio.required_margin_factor) == 1.5
+    assert comms.required_margin_db(cfg) == pytest.approx(
+        10.0 * math.log10(1.5), abs=1e-9)
+    assert comms.required_margin_db(cfg) < 2.0
+    assert comms.link_threshold_db(cfg) == pytest.approx(
+        comms.eb_n0_required_db(cfg) + comms.required_margin_db(cfg)
+        + float(cfg.radio.implementation_loss_db))
+    # Removing the factor falls back to the flat budget figure.
+    flat = cfg.copy_with(**{"radio.required_margin_factor": 0.0})
+    assert comms.required_margin_db(flat) == pytest.approx(
+        float(cfg.radio.required_margin_db))
+
+
+def test_a_looser_margin_never_closes_fewer_links():
+    cfg = MissionConfig()
+    strict = cfg.copy_with(**{"radio.required_margin_factor": 0.0})   # 6 dB
+    ranges = np.linspace(400e3, 2000e3, 40)
+    loose_rate = comms.achievable_bitrate_bps(cfg, ranges)
+    strict_rate = comms.achievable_bitrate_bps(strict, ranges)
+    assert np.all(loose_rate >= strict_rate)
+
+
+def test_pointing_the_antenna_is_decided_by_the_link_not_by_policy():
+    """Whether a contact has to be flown antenna-on-station is a budget answer.
+
+    Turning the vehicle to put the +x patch on the station is what justifies
+    the -3 dB nominal pointing loss rather than the -10 dB worst case. It also
+    costs a magnetorquer manoeuvre at each end, so it is only worth doing where
+    the link would not otherwise close.
+    """
+    cfg = MissionConfig()
+    ranges = np.array([500e3, 1000e3, 1500e3])
+    # At S-band with this EIRP the low-rate link closes even edge-on.
+    assert np.all(comms.achievable_bitrate_bps(
+        cfg, ranges, worst_case_pointing=True) > 0)
+    assert not np.any(comms.downlink_needs_pointing(cfg, ranges))
+
+    # Starve the link and the answer flips, without any policy changing.
+    weak = cfg.copy_with(**{"radio.tx_power_w": 0.02,
+                            "radio.tx_antenna_gain_dbi": -6.0})
+    assert np.all(comms.downlink_needs_pointing(weak, ranges))
+
+
+def test_margin_over_threshold_is_positive_exactly_when_the_link_closes():
+    cfg = MissionConfig()
+    ranges = np.linspace(400e3, 3000e3, 60)
+    rate = comms.achievable_bitrate_bps(cfg, ranges)
+    channel = rate * float(cfg.radio.fec_overhead)
+    margin = comms.margin_over_threshold_db(cfg, ranges, channel)
+    closes = rate > 0
+    assert np.all(margin[closes] >= -1e-9)
+    assert np.all(np.isnan(margin[~closes]))
