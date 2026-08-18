@@ -196,8 +196,12 @@ in [IMAGE_STORE.md](IMAGE_STORE.md).
 | A_2panel_90 | 14.8 | 8.9 % | 22.8 min | 7,730 | 15 | 80.2 % |
 | B_3panel_90 | 22.0 | 26.9 % | 26.8 min | 23,245 | 40 | 86.7 % |
 | **C_2panel_135_plus_body** | 22.3 | **43.3 %** | 28.2 min | **37,420** | 37 | 97.6 % |
-| D_2panel_135_minus_x | 14.8 | 1.0 % | 12.2 min | 895 | 2 | 41.2 % |
+| D_2panel_135_minus_x* | 14.8 | 1.0 % | 12.2 min | 895 | 2 | 41.2 % |
 | E_2panel_135_no_body | 14.8 | 16.5 % | 27.5 min | 14,260 | 21 | 81.1 % |
+
+\* D's simulated columns above predate the panel-dihedral correction below
+(90° between panels vs. the corrected 135°) and need a fresh
+`run_analysis.py` pass; `peak_total_w` is unaffected.
 
 The median observation is now 23–28 minutes against a 46-minute window, where
 it started at 2.5–4 minutes. C converts 85 % of the pointing opportunity it
@@ -205,16 +209,17 @@ shares with every other geometry.
 
 ## What the two extra geometries show
 
-**D — two panels at 135° off the -x face, as a symmetric V.** The worst of the
-five by a wide margin: mean SOC 41 %, below the 36 % safe threshold at its
-minimum, and under a thousand images a day. Modelled honestly as two panels on
-*different* normals — a real dihedral is not one flat surface — the V can never
-put both panels at full cosine at once, so its effective peak is
-2 x 7.4 x cos 45° = 10.5 W against A's 14.8 W from a single flat wing. A
-dihedral buys tolerance to Sun direction, and a vehicle that can point at the
-Sun has no use for tolerance to Sun direction. It would be the right shape for
-a spinner or a vehicle with no attitude control, and it is the wrong shape for
-this one.
+**D — a single deployable wing on the -x face, folded to a 135° dihedral
+between its 2 panels.** It is one mechanism, not two: one hinge/motor
+deploys the whole wing, which then presents two panel faces 135° apart
+(each 22.5° off the -x centerline) rather than one flat surface. Modelled
+honestly on two different normals, the V can never put both panels at full
+cosine at once, so its effective peak is 2 x 7.4 x cos 22.5° = 13.7 W against
+A's 14.8 W from a single flat wing — closer to A than the shallower fold this
+replaces, since 135° is a much gentler V than 90°. A dihedral buys tolerance
+to Sun direction, and a vehicle that can point at the Sun has no use for
+tolerance to Sun direction. It would be the right shape for a spinner or a
+vehicle with no attitude control, and it is the wrong shape for this one.
 
 **E — geometry C's wing without the body-mounted panel.** 14,260 images a day
 against C's 37,420, so the 7.5 W body panel — a third more peak power — is
