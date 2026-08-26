@@ -75,17 +75,21 @@ The number that matters is not how full the disc is at any instant but
 directly. A backlog growing at *N* frames a day divides 195,312 frames of
 capacity into the time before imaging has to stop.
 
-At the configured 0.5 Hz that is not a distant limit. Measured over 8 days:
+At the configured 0.5 Hz that is not a distant limit. Measured over 3 days,
+with the manoeuvre gates in (an earlier 8-day run, before those, had geometry C
+filling on day 7 — it was imaging less, so it filled more slowly):
 
-| | backlog growth | store after 8 days |
-|---|---|---|
-| A_2panel_90 | +640 frames/day | 4.8 GB |
-| B_3panel_90 | +15,460 frames/day | 82.3 GB |
-| C_2panel_135_plus_body | +24,000 frames/day | **full on day 7** |
+| | backlog growth | store after 3 days | 128 GB reached |
+|---|---|---|---|
+| A_2panel_90 | +6,772 frames/day | 14.7 GB | day 29 |
+| B_3panel_90 | +22,287 frames/day | 45.1 GB | day 9 |
+| C_2panel_135_plus_body | +36,463 frames/day | 73.0 GB | **day 5** |
+| E_2panel_135_no_body | +13,301 frames/day | 27.4 GB | day 15 |
 
-The reduction cadence gets through 960 frames a day. Geometry C captures
-between twenty and forty times that, so the 128 GB is not really 128 GB of
-margin — it is about a week of buffer, after which the mission is limited by
-how fast the OBC can reduce rather than by pointing or power. Lowering
-`analysis.payload_rate_hz`, raising the reduction cadence, or shortening the
-48-hour retention are the three levers, and the first is the only free one.
+The reduction cadence gets through 960 frames a day. Geometry C captures nearly
+forty times that, so the 128 GB is not really 128 GB of margin — it is under a
+week of buffer, after which the mission is limited by how fast the OBC can
+reduce rather than by pointing or power. Note the perverse ordering: the better
+a geometry performs, the sooner it stops. Lowering `analysis.payload_rate_hz`,
+raising the reduction cadence, or shortening the 48-hour retention are the three
+levers, and the first is the only free one.
